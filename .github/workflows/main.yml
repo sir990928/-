@@ -1,6 +1,6 @@
 name: Build Kernel
 
-on:
+关于：:
   workflow_dispatch:
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: sudo apt update && sudo apt install -y bc bison flex gcc-aarch64-linux-gnu libssl-dev make zip
+        run: sudo apt update && sudo apt install -y bc bison flex gcc-aarch64-linux-gnu libssl-dev make zip python3
 
       - name: Download your zip package
         run: wget -O files.zip "https://3004.filemail.com/api/file/get?compressedfilekey=mFzHcD7uQxqiELj5hREADDk799vJ1AYPfpDs-uWemg"
@@ -24,16 +24,20 @@ jobs:
       - name: Extract toolchain
         run: mkdir toolchain && ls | grep toolchain | xargs -I {} tar -xf {} -C toolchain --strip-components=1 2>/dev/null || true
 
-      - name: Build kernel
+      - name: Add toolchain to PATH
+        run: echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
+
+      - name: Build kernel with GKI script
         run: |
           cd kernel
-          make ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu- defconfig
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu-
+          chmod +x build_kernel_GKI.sh
+          ./build_kernel_GKI.sh pa3q_chn_openx user sun
 
       - name: Make flashable zip
         run: |
           cd kernel
-          zip kernel.zip arch/arm64/boot/Image* arch/arm64/boot/dtbo.img
+          # 兼容GKI脚本的out目录和原生boot目录
+          zip kernel.zip out/arch/arm64/boot/Image* out/arch/arm64/boot/dtbo.img 2>/dev/null || zip kernel.zip arch/arm64/boot/Image* arch/arm64/boot/dtbo.img 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
