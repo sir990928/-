@@ -1,6 +1,6 @@
 name: Build Kernel
 
-关于：:
+on:
   workflow_dispatch:
 
 jobs:
