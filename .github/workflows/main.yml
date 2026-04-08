@@ -1,12 +1,12 @@
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-: Build Kernel
+name: Build Kernel
 
-构建内核:
-: :
+on:
+  workflow_dispatch:
 
-名称:
-  构建:
-    流道: ubuntu-latest
-    步骤:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v4
 
       - name: Install build tools
@@ -22,20 +22,20 @@
         run: mkdir kernel && tar -xf *.tar.gz -C kernel --strip-components=1 2>/dev/null || true
 
       - name: Extract toolchain
-        运行: mkdir toolchain && ls | grep toolchain | xargs -I  mkdir 工具链 &&&ls | grep 工具链 | xargs -I } tar -xf {} -C toolchain --strip-components=1 2>/dev/null || true
+        run: mkdir toolchain && ls | grep toolchain | xargs -I {} tar -xf {} -C toolchain --strip-components=1 2>/dev/null || true
 
       - name: Build kernel
-        运行: |
+        run: |
           cd kernel
           make ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu- defconfig
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=./toolchain/bin/aarch64-linux-gnu-
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu-
 
       - name: Make flashable zip
-        运行: |
-          CD 内核
+        run: |
+          cd kernel
           zip kernel.zip arch/arm64/boot/Image* arch/arm64/boot/dtbo.img
 
       - uses: actions/upload-artifact@v4
-        与:
+        with:
           name: kernel-flashable
           path: kernel/kernel.zip
