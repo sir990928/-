@@ -1,41 +1,44 @@
-name: Build Kernel
+name: 云同步到仓库
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手动触发：在 Actions 页面点 "Run workflow" 即可开始
 
 jobs:
-  build:
+  sync_data:
     runs-on: ubuntu-latest
+    # 增加权限，允许 Action 写入你的仓库
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出仓库
+        uses: actions/checkout@v4
 
-      - name: Install build tools
-        run: sudo apt update && sudo apt install -y bc bison flex gcc-aarch64-linux-gnu libssl-dev make zip
-
-      - name: Download your zip package
-        run: wget -O files.zip "https://3004.filemail.com/api/file/get?compressedfilekey=mFzHcD7uQxqiELj5hREADDk799vJ1AYPfpDs-uWemg"
-
-      - name: Unzip all
-        run: unzip files.zip -d .
-
-      - name: Extract kernel
-        run: mkdir kernel && tar -xf *.tar.gz -C kernel --strip-components=1 2>/dev/null || true
-
-      - name: Extract toolchain
-        run: mkdir toolchain && ls | grep toolchain | xargs -I {} tar -xf {} -C toolchain --strip-components=1 2>/dev/null || true
-
-      - name: Build kernel
+      - name: 从云端下载并处理数据
         run: |
-          cd kernel
-          make ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu- defconfig
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=../toolchain/bin/aarch64-linux-gnu-
+          # 1. 下载你的 10GB+ 大包
+          curl -L "https://3004.filemail.com/api/file/get?compressedfilekey=mFzHcD7uQxqiELj5hREADDk799vJ1AYPfpDs-uWemg" -o workspace.zip
+          
+          # 2. 解压外层 ZIP
+          unzip workspace.zip
+          
+          # 3. 解压你的两个核心 tar.gz (请确保文件名正确，如果不确定可以先 ls 查看)
+          # 假设文件名是 Kernel.tar.gz 和 toolchain.tar.gz
+          tar -xzvf Kernel.tar.gz
+          tar -xzvf toolchain.tar.gz
+          
+          # 4. 删除多余的压缩包节省空间
+          rm workspace.zip *.tar.gz
 
-      - name: Make flashable zip
+      - name: 强力提交至仓库
         run: |
-          cd kernel
-          zip kernel.zip arch/arm64/boot/Image* arch/arm64/boot/dtbo.img
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: kernel-flashable
-          path: kernel/kernel.zip
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 添加所有解压后的文件
+          git add .
+          
+          # 提交并推送
+          # 注意：因为数据量巨大，GitHub 可能需要一点时间处理
+          git commit -m "chore: cloud sync source and tools"
+          git push origin main
