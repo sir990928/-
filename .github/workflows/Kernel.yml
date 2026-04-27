@@ -53,25 +53,35 @@ jobs:
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
 
+      - name "Generate Zip Name"
+        id: zipname
+        run: |
+          TZ=Asia/Shanghai
+          NOW=$(date +"%Y%m%d_%H%M%S")
+          SU_NAME=${{ github.event.inputs.su }}
+          echo "ZIP_NAME=${SU_NAME}_${NOW}_S25U.zip" >> $GITHUB_ENV
+
       - name: "Pack kernel zip"
         if: always()
         run: |
           mkdir -p final_artifacts
-          git clone --depth=1 https://github.com/fei-ke/AnyKernel3.git -s s25 ak3_pack
+          # 拉取你的仓库 AnyKernel3 分支
+          git clone --depth 1 -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
 
-          cp device/qcom/gki-kernel/Image ak3_pack/ || echo "Image not found"
-          cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || echo "dtbo not found"
+          cp device/qcom/gki-kernel/Image ak3_pack/ || true
+          cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
 
-          mkdir -p ak3_pack/modules
-          find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/ \;
+          # GKI DLKM 正确路径
+          mkdir -p ak3_pack/modules/vendor/lib/modules
+          find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/vendor/lib/modules/ \;
 
           cd ak3_pack
-          zip -r9 ../final_artifacts/S25U-Kernel.zip .
+          zip -r9 ../final_artifacts/${{ env.ZIP_NAME }} .
 
       - name: "Upload kernel package"
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: S25U-Kernel
-          path: final_artifacts/S25U-Kernel.zip
+          name: ${{ env.ZIP_NAME }}
+          path: final_artifacts/${{ env.ZIP_NAME }}
 
