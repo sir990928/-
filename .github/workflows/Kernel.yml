@@ -18,17 +18,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🚀 只拉最新 main 代码，完全不拉历史
+      - name: 🚀 仅拉最新单提交，极速检出
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
           token: ${{ secrets.Yml }}
           fetch-depth: 1
+          submodules: false
+          fetch-tags: false
 
-      - name: 🔁 直接取 config-deploy 最新代码覆盖
+      - name: 🔁 极速拉取 config-deploy 最新覆盖
         run: |
-          git fetch origin config-deploy --depth 1
-          git checkout origin/config-deploy -- .
+          git fetch origin config-deploy --depth 1 --no-tags
+          git checkout --force origin/config-deploy -- .
 
       - name: 🧩 合并大于90M分片文件
         uses: ./.github/actions/merge-files
@@ -66,7 +68,7 @@ jobs:
         if: ${{ always() }}
         run: |
           mkdir -p final_artifacts
-          git clone --depth 1 -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
+          git clone --depth 1 --no-tags -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
           cp device/qcom/gki-kernel/Image ak3_pack/ || true
           cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
           mkdir -p ak3_pack/modules/vendor/lib/modules
