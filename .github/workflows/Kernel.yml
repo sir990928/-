@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       su:
-        description: "选择SU类型"
+        description: "SU Type"
         required: true
         default: "KernelSU"
         type: choice
@@ -18,28 +18,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🚀 只拉最新 main 代码，完全不拉历史
+      - name: "Checkout latest main code"
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
           token: ${{ secrets.Yml }}
           fetch-depth: 1
 
-      # 直接拉 config-deploy 最新代码并覆盖，不做 git merge
-      - name: 🔁 直接取 config-deploy 最新代码覆盖
+      - name: "Overwrite with config-deploy latest code"
         run: |
           git fetch origin config-deploy --depth 1
           git checkout origin/config-deploy -- .
 
-      - name: 🧩 合并大于90M分片文件
+      - name: "Merge large split files"
         uses: ./.github/actions/merge-files
 
-      - name: 🧩 注入 SU
+      - name: "Inject SU"
         uses: ./.github/actions/setup-Root
         with:
           su: ${{ github.event.inputs.su }}
 
-      - name: 🧩 自动配置并注入 SUSFS
+      - name: "Configure and inject SUSFS"
         uses: ./.github/actions/setup-susfs
         with:
           android_version: android15
@@ -48,17 +47,17 @@ jobs:
           sublevel: '30'
           apply_ksu_patch: ${{ github.event.inputs.su != '' }}
 
-      - name: 🏗️ 根目录直接编译内核
+      - name: "Build kernel"
         run: |
           ./kernel_platform/build/kernel/build.config.sh &
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
 
-      - name: 📦 精准提取内核文件并打包
+      - name: "Pack kernel zip"
         if: always()
         run: |
           mkdir -p final_artifacts
-          git clone --depth=1 https://github.com/fei-ke/AnyKernel3.git -b s25 ak3_pack
+          git clone --depth=1 https://github.com/fei-ke/AnyKernel3.git -s s25 ak3_pack
 
           cp device/qcom/gki-kernel/Image ak3_pack/ || echo "Image not found"
           cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || echo "dtbo not found"
@@ -69,7 +68,7 @@ jobs:
           cd ak3_pack
           zip -r9 ../final_artifacts/S25U-Kernel.zip .
 
-      - name: 📤 上传最终卡刷包
+      - name: "Upload kernel package"
         if: always()
         uses: actions/upload-artifact@v4
         with:
