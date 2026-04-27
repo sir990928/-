@@ -53,7 +53,7 @@ jobs:
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
 
-      - name "Generate Zip Name"
+      - name: "Generate Zip Name"
         id: zipname
         run: |
           TZ=Asia/Shanghai
@@ -65,13 +65,11 @@ jobs:
         if: always()
         run: |
           mkdir -p final_artifacts
-          # 拉取你的仓库 AnyKernel3 分支
           git clone --depth 1 -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
 
           cp device/qcom/gki-kernel/Image ak3_pack/ || true
           cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
 
-          # GKI DLKM 正确路径
           mkdir -p ak3_pack/modules/vendor/lib/modules
           find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/vendor/lib/modules/ \;
 
