@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       su:
-        description: "SU Type"
+        description: "选择SU类型"
         required: true
         default: "KernelSU"
         type: choice
@@ -18,27 +18,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout latest main code"
+      - name: 🚀 只拉最新 main 代码，完全不拉历史
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
           token: ${{ secrets.Yml }}
           fetch-depth: 1
 
-      - name: "Overwrite with config-deploy latest code"
+      - name: 🔁 直接取 config-deploy 最新代码覆盖
         run: |
           git fetch origin config-deploy --depth 1
           git checkout origin/config-deploy -- .
 
-      - name: "Merge large split files"
+      - name: 🧩 合并大于90M分片文件
         uses: ./.github/actions/merge-files
 
-      - name: "Inject SU"
+      - name: 🧩 注入 SU
         uses: ./.github/actions/setup-Root
         with:
           su: ${{ github.event.inputs.su }}
 
-      - name: "Configure and inject SUSFS"
+      - name: 🧩 自动配置并注入 SUSFS
         uses: ./.github/actions/setup-susfs
         with:
           android_version: android15
@@ -47,8 +47,10 @@ jobs:
           sublevel: '30'
           apply_ksu_patch: ${{ github.event.inputs.su != '' }}
 
-      - name: "Build kernel"
+      - name: 🏗️ 根目录直接编译内核
         run: |
+          SU_TYPE=${{ github.event.inputs.su }}
+          sed -i "s|^CONFIG_LOCALVERSION=.*|CONFIG_LOCALVERSION=\"-S25ultra-${SU_TYPE}\"|" .config
           ./kernel_platform/build/kernel/build.config.sh &
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
@@ -62,22 +64,19 @@ jobs:
           echo "ZIP_NAME=${SU_NAME}_${NOW}_S25U.zip" >> $GITHUB_ENV
 
       - name: "Pack kernel zip"
-        if: always()
+        if: ${{ always() }}
         run: |
           mkdir -p final_artifacts
           git clone --depth 1 -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
-
           cp device/qcom/gki-kernel/Image ak3_pack/ || true
           cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
-
           mkdir -p ak3_pack/modules/vendor/lib/modules
           find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/vendor/lib/modules/ \;
-
           cd ak3_pack
-          zip -r9 ../final_artifacts/${{ env.ZIP_NAME }} .
+          zip -r9 ../final_artifacts/$ZIP_NAME . -x "*.git*"
 
       - name: "Upload kernel package"
-        if: always()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ZIP_NAME }}
