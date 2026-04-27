@@ -49,8 +49,7 @@ jobs:
 
       - name: 🏗️ 根目录直接编译内核
         run: |
-          SU_TYPE=${{ github.event.inputs.su }}
-          sed -i "s|^CONFIG_LOCALVERSION=.*|CONFIG_LOCALVERSION=\"-S25ultra-${SU_TYPE}\"|" .config
+          export LOCALVERSION="-S25ultra-${{ github.event.inputs.su }}"
           ./kernel_platform/build/kernel/build.config.sh &
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
