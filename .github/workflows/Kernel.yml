@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
-          token: ${{ secrets.PAT }}   # 这里换成你刚设的 PAT
+          token: ${{ secrets.Yml }}   # 这里换成你刚设的 PAT
           fetch-depth: 0
 
       - name: 🔀 合并 config-deploy 分支
