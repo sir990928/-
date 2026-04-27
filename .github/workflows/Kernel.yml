@@ -21,21 +21,19 @@ jobs:
       run:
         working-directory: .
     steps:
-      - name: 🚀 拉取 S25u 主分支 main
+      - name: 🚀 拉取 S25u 最新 main 分支（仅最新代码，更快）
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
-          ref: main
           token: ${{ secrets.Yml }}
-          fetch-depth: 1  # 只拉 main 最新提交，保证速度
+          fetch-depth: 1
 
-      - name: 🔀 合并 config-deploy 分支
+      - name: 🔀 合并 config-deploy 分支（允许无关历史）
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          # 只去掉 config-deploy 的 --depth 1，让 Git 拿到分支关系
           git fetch origin config-deploy
-          git merge origin/config-deploy --no-edit
+          git merge origin/config-deploy --no-edit --allow-unrelated-histories
 
       - name: 🧩 合并大于90M分片文件
         uses: ./.github/actions/merge-files
