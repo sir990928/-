@@ -1,0 +1,23 @@
+name: Merge split files (>90MB)
+runs:
+  using: composite
+  steps:
+    - name: Merge split parts + setup environment
+      shell: bash
+      run: |
+        echo "🔧 合并大于90M的分片文件..."
+        find . -name "*.part.aa" | while read part; do
+          original="${part%.part.aa}"
+          cat "$original".part.* > "$original"
+          rm -f "$original".part.*
+          echo "✅ 已合并：$original"
+        done
+
+        echo "🔧 安装系统依赖..."
+        sudo apt update && sudo apt install -y zip cpio python3 inotify-tools patch
+
+        echo "🔧 赋予全局可执行权限..."
+        sudo chmod -R 777 .
+        find . -name "*.sh" -exec chmod +x {} \;
+        find . -name "clang*" -o -name "*.real" | xargs chmod +x 2>/dev/null
+

@@ -1,0 +1,80 @@
+name: "S25U"
+
+on:
+  workflow_dispatch:
+    inputs:
+      su:
+        description: "选择SU类型"
+        required: true
+        default: "KernelSU"
+        type: choice
+        options:
+          - KernelSU
+          - SukiSU-Ultra
+          - KernelSU-Next
+          - ReSukiSU
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: 🚀 拉取私有仓库主分支
+        uses: actions/checkout@v4
+        with:
+          repository: sir990928/S25u
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: 🔀 合并 config-deploy 分支
+        run: |
+          git fetch origin config-deploy
+          git merge origin/config-deploy --no-edit
+
+      - name: 🧩 合并大于90M分片文件
+        uses: ./.github/actions/merge-files
+
+      - name: 🧩 注入 SU
+        uses: ./.github/actions/setup-Root
+        with:
+          su: ${{ github.event.inputs.su }}
+
+      - name: 🧩 自动配置并注入 SUSFS
+        uses: ./.github/actions/setup-susfs
+        with:
+          android_version: android15
+          kernel_version: '6.6'
+          os_patch_level: '2025-03-01'
+          sublevel: '30'
+          apply_ksu_patch: ${{ github.event.inputs.su != '' }}
+
+      - name: 🏗️ 根目录直接编译内核
+        run: |
+          ./kernel_platform/build/kernel/build.config.sh &
+          sleep 2
+          yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
+
+      - name: 📦 精准提取内核文件并打包
+        if: always()
+        run: |
+          mkdir -p final_artifacts
+          git clone --depth=1 https://github.com/fei-ke/AnyKernel3.git -b s25 ak3_pack
+
+          cp device/qcom/gki-kernel/Image ak3_pack/ || echo "Image not found"
+          cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || echo "dtbo not found"
+
+          mkdir -p ak3_pack/modules
+          find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/ \;
+
+          cd ak3_pack
+          zip -r9 ../final_artifacts/S25U-Kernel.zip .
+
+      - name: 📤 上传最终卡刷包
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: S25U-Kernel
+          path: final_artifacts/S25U-Kernel.zip
+

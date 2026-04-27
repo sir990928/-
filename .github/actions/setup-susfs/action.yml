@@ -1,0 +1,63 @@
+name: Setup SUSFS
+description: Use local SUSFS patches with optional KSU patch
+inputs:
+  android_version:
+    required: true
+  kernel_version:
+    required: true
+  os_patch_level:
+    required: true
+  sublevel:
+    required: true
+  apply_ksu_patch:
+    required: true
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Append SUSFS config to com.config
+      shell: bash
+      run: |
+        cat >> "${{ github.workspace }}/com.config" << 'EOF'
+        # SUSFS
+        CONFIG_KSU_SUSFS=y
+        CONFIG_KSU_SUSFS_SUS_PATH=y
+        CONFIG_KSU_SUSFS_SUS_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_KSTAT=y
+        CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+        CONFIG_KSU_SUSFS_ENABLE_LOG=y
+        CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+        CONFIG_KSU_SUSFS_SUS_MAP=y
+        EOF
+
+    - name: Apply kernel SUSFS patches
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel_platform/common
+      run: |
+        cp -rf "${{ github.workspace }}/susfs4ksu/kernel_patches/fs/"* ./fs/
+        cp -rf "${{ github.workspace }}/susfs4ksu/kernel_patches/include/linux/"* ./include/linux/
+        cp -f "${{ github.workspace }}/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch" ./
+
+        patch -p1 -F3 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+
+    - name: Apply KSU internal SUSFS patch
+      if: ${{ inputs.apply_ksu_patch == 'true' }}
+      shell: bash
+      run: |
+        KSU_DIR=""
+        if [ -d "${{ github.workspace }}/kernel_platform/common/KernelSU-Next" ]; then
+          KSU_DIR="${{ github.workspace }}/kernel_platform/common/KernelSU-Next"
+        elif [ -d "${{ github.workspace }}/kernel_platform/common/KernelSU" ]; then
+          KSU_DIR="${{ github.workspace }}/kernel_platform/common/KernelSU"
+        else
+          echo "❌ No KernelSU directory found"
+          exit 1
+        fi
+
+        cd "$KSU_DIR"
+        patch -p1 -F3 < "${{ github.workspace }}/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+
+
