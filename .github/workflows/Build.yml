@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 一次性拉取B，覆盖A目录
+      # 拉取B 全覆盖
       - name: Checkout B源码
         uses: actions/checkout@v4
         with:
@@ -25,8 +25,23 @@ jobs:
           token: ${{ secrets.Yml }}
           fetch-depth: 1
 
+      # 切换分支
       - name: 切换 config-deploy
         run: |
           git fetch origin config-deploy --depth 1
           git checkout origin/config-deploy -- .
+
+      # 关键：就地执行B仓库自带的 Kernel.yml
+      - name: 执行B仓库Kernel.yml
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow = ".github/workflows/Kernel.yml";
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflow,
+              ref: context.ref,
+              inputs: { su: '${{ github.event.inputs.su }}' }
+            });
 
