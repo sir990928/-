@@ -1,0 +1,32 @@
+name: "S25U"
+on:
+  workflow_dispatch:
+    inputs:
+      su:
+        description: "SU Type"
+        required: true
+        default: "KernelSU"
+        type: choice
+        options:
+          - KernelSU
+          - SukiSU-Ultra
+          - KernelSU-Next
+          - ReSukiSU
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 一次性拉取B，覆盖A目录
+      - name: Checkout B源码
+        uses: actions/checkout@v4
+        with:
+          repository: sir990928/S25u
+          token: ${{ secrets.Yml }}
+          fetch-depth: 1
+
+      - name: 切换 config-deploy
+        run: |
+          git fetch origin config-deploy --depth 1
+          git checkout origin/config-deploy -- .
+
