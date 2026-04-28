@@ -52,6 +52,6 @@ jobs:
           apply_ksu_patch: ${{ github.event.inputs.su != '' }}
 
       - name: 编译打包上传全套
-        uses: ./.github/actions/build-and-pack
+        uses: ./.github/actions/build-finish
         with:
           su-type: ${{ github.event.inputs.su }}
