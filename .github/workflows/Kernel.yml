@@ -51,41 +51,7 @@ jobs:
           sublevel: '30'
           apply_ksu_patch: ${{ github.event.inputs.su != '' }}
 
-      - name: 🏗️ 根目录直接编译内核
-        # 强制关闭环境变量校验，解决 Symbols missing from the ksymtab 报错
-        env:
-          KMI_SYMBOL_LIST_STRICT_MODE: "false"
-          UNSAFE_SKIP_ABI_CHECKS: "1"
-        run: |
-          ./kernel_platform/build/kernel/build.config.sh &
-          sleep 2
-          yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
-
-      - name: "Generate Zip Name"
-        id: zipname
-        run: |
-          TZ=Asia/Shanghai
-          NOW=$(date +"%Y%m%d_%H%M%S")
-          SU_NAME=${{ github.event.inputs.su }}
-          echo "ZIP_NAME=${SU_NAME}_${NOW}_S25U.zip" >> $GITHUB_ENV
-
-      - name: "Pack kernel zip"
-        if: ${{ always() }}
-        run: |
-          mkdir -p final_artifacts
-          git clone --depth 1 --no-tags -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
-          cp device/qcom/gki-kernel/Image ak3_pack/ || true
-          cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
-          mkdir -p ak3_pack/modules/vendor/lib/modules
-          # 精准复制所有 ko 模块到打包目录
-          find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/vendor/lib/modules/ \;
-          cd ak3_pack
-          zip -r9 ../final_artifacts/${{ env.ZIP_NAME }} . -x "*.git*"
-
-      - name: "Upload kernel package"
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+      - name: 编译打包上传全套
+        uses: ./.github/actions/build-and-pack
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: final_artifacts/${{ env.ZIP_NAME }}
-
+          su-type: ${{ github.event.inputs.su }}
