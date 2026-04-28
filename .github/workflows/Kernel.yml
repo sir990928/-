@@ -34,6 +34,8 @@ jobs:
 
       - name: 🧩 合并大于90M分片文件
         uses: ./.github/actions/merge-files
+        env:
+          KSU_NAME: ${{ github.event.inputs.su }}
 
       - name: 🧩 注入 SU
         uses: ./.github/actions/setup-Root
@@ -51,7 +53,7 @@ jobs:
 
       - name: 🏗️ 根目录直接编译内核
         run: |
-          export LOCALVERSION="-S25ultra-${{ github.event.inputs.su }}"
+          # 这里很干净，不需要 export LOCALVERSION，版本号已被 merge-files 物理接管
           ./kernel_platform/build/kernel/build.config.sh &
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
