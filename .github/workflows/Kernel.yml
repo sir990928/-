@@ -84,4 +84,3 @@ jobs:
         with:
           name: ${{ env.ZIP_NAME }}
           path: final_artifacts/${{ env.ZIP_NAME }}
-每个name定义
