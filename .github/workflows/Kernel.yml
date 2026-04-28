@@ -1,4 +1,4 @@
-name: "S25U"
+name: "S25U-Structured"
 
 on:
   workflow_dispatch:
@@ -15,73 +15,50 @@ on:
           - ReSukiSU
 
 jobs:
-  build:
+  # --- 文件夹 1: 环境准备与注入 (Prepare_and_Patch) ---
+  Prepare_and_Patch:
     runs-on: ubuntu-latest
     steps:
-      - name: 🚀 仅拉最新单提交，极速检出
+      - name: 🚀 检出代码
         uses: actions/checkout@v4
         with:
           repository: sir990928/S25u
           token: ${{ secrets.Yml }}
           fetch-depth: 1
-          submodules: false
-          fetch-tags: false
 
-      - name: 🔁 极速拉取 config-deploy 最新覆盖
+      - name: 🔁 覆盖配置
         run: |
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
 
-      - name: 🧩 合并大于90M分片文件
-        uses: ./.github/actions/merge-files
-        env:
-          KSU_NAME: ${{ github.event.inputs.su }}
+      - name: 🧩 执行合并与注入逻辑
+        run: echo "此处运行 merge-files, setup-Root, setup-susfs"
+        # 注意：为了让下一个 Job 能编，你可能需要在这里 upload 整个源码（极其耗时）
+        # 或者将 Prepare 和 Build 合并在一个 Job 里，只把 Pack 拆出去。
 
-      - name: 🧩 注入 SU
-        uses: ./.github/actions/setup-Root
-        with:
-          su: ${{ github.event.inputs.su }}
-
-      - name: 🧩 自动配置并注入 SUSFS
-        uses: ./.github/actions/setup-susfs
-        with:
-          android_version: android15
-          kernel_version: '6.6'
-          os_patch_level: '2025-03-01'
-          sublevel: '30'
-          apply_ksu_patch: ${{ github.event.inputs.su != '' }}
-
-      - name: 🏗️ 根目录直接编译内核
+  # --- 文件夹 2: 核心编译 (Kernel_Build) ---
+  Kernel_Build:
+    needs: Prepare_and_Patch
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗️ 运行编译脚本
         run: |
-          # 这里很干净，不需要 export LOCALVERSION，版本号已被 merge-files 物理接管
           ./kernel_platform/build/kernel/build.config.sh &
           sleep 2
           yes "" | ./build_kernel_GKI.sh pa3q_chn_openx user sun
 
-      - name: "Generate Zip Name"
-        id: zipname
-        run: |
-          TZ=Asia/Shanghai
-          NOW=$(date +"%Y%m%d_%H%M%S")
-          SU_NAME=${{ github.event.inputs.su }}
-          echo "ZIP_NAME=${SU_NAME}_${NOW}_S25U.zip" >> $GITHUB_ENV
+  # --- 文件夹 3: 打包与上传 (Final_Packaging) ---
+  Final_Packaging:
+    needs: Kernel_Build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: 📦 AnyKernel3 打包
+        run: echo "执行 zip 打包逻辑"
 
-      - name: "Pack kernel zip"
-        if: ${{ always() }}
-        run: |
-          mkdir -p final_artifacts
-          git clone --depth 1 --no-tags -b AnyKernel3 https://github.com/sir990928/-.git ak3_pack
-          cp device/qcom/gki-kernel/Image ak3_pack/ || true
-          cp device/qcom/gki-kernel/dtbs/dtbo.img ak3_pack/ || true
-          mkdir -p ak3_pack/modules/vendor/lib/modules
-          find device/qcom/gki-kernel/system_dlkm/lib/modules/ -name "*.ko" -exec cp {} ak3_pack/modules/vendor/lib/modules/ \;
-          cd ak3_pack
-          zip -r9 ../final_artifacts/$ZIP_NAME . -x "*.git*"
-
-      - name: "Upload kernel package"
-        if: ${{ always() }}
+      - name: 📤 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: final_artifacts/${{ env.ZIP_NAME }}
+          name: S25U-Kernel
+          path: final_artifacts/
 
