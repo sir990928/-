@@ -31,6 +31,8 @@ jobs:
         run: |
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
+      - name: 预处理清理BZL模块校验
+        uses: ./.github/actions/clean-bzl
 
       - name: 🧩 合并大于90M分片文件
         uses: ./.github/actions/merge-files
