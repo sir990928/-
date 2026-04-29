@@ -31,8 +31,8 @@ jobs:
         run: |
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
-
-       - name: 碎片合成与授权
+    
+      - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
 
       - name: 版本号注入
