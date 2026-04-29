@@ -7,7 +7,7 @@ properties() { '
 kernel.string=S25x GKI Kernel by Yufz
 do.devicecheck=1
 do.modules=1
-do.systemless=1
+do.systemless=0
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=pa3q
