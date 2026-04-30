@@ -47,10 +47,11 @@ jobs:
             echo "⚠️ $FILE 未找到，跳过"
           fi
 
-          # 2. 删除两个 BUILD.bazel 里的相关行
-          for F in kernel_platform/common/BUILD.bazel kernel_platform/msm-kernel/BUILD.bazel; do
+          # 2. 删除两个 modules.bzl 里包含 zram/zsmalloc/ssg 的行
+          for F in kernel_platform/common/modules.bzl kernel_platform/msm-kernel/modules.bzl; do
             if [ -f "$F" ]; then
-              sed -i '/zram\.ko\|zsmalloc\.ko\|ssg\.ko/d' "$F"
+              grep -v 'zram.ko\|zsmalloc.ko\|ssg.ko' "$F" > /tmp/clean_bzl
+              mv /tmp/clean_bzl "$F"
               echo "✅ 已清理 $F"
             else
               echo "⚠️ $F 未找到，跳过"
