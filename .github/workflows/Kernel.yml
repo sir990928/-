@@ -9,6 +9,7 @@ on:
         default: "KernelSU"
         type: choice
         options:
+          - None
           - KernelSU
           - SukiSU-Ultra
           - KernelSU-Next
