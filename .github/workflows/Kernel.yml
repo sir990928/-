@@ -1,4 +1,4 @@
-name: "S25U"
+name: "SM-S9380"
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
         run: |
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
-    
+
       - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
 
@@ -49,12 +49,9 @@ jobs:
       - name: 🧩 自动配置并注入 SUSFS
         uses: ./.github/actions/setup-susfs
         with:
-          android_version: android15
-          kernel_version: '6.6'
-          os_patch_level: '2025-03-01'
-          sublevel: '30'
           apply_ksu_patch: ${{ github.event.inputs.su != 'None' }}
-          
+          su: ${{ github.event.inputs.su }}
+
       - name: 编译打包上传全套
         uses: ./.github/actions/build-finish
         with:
