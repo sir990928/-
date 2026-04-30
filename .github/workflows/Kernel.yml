@@ -33,6 +33,13 @@ jobs:
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
 
+      - name: 注释掉 prepare_vendor 强制复制
+        shell: bash
+        run: |
+         grep -v "cp.*zsmalloc\.ko\|cp.*zram\.ko" kernel_platform/build/kernel/android/prepare_vendor.sh > /tmp/prepare_vendor_clean.sh
+         mv /tmp/prepare_vendor_clean.sh kernel_platform/build/kernel/android/prepare_vendor.sh
+         chmod +x kernel_platform/build/kernel/android/prepare_vendor.sh
+         
       - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
 
