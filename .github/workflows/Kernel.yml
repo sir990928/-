@@ -33,12 +33,31 @@ jobs:
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
 
-      - name: 一键清理所有残留模块引用
+      - name: 精准清理
         shell: bash
         run: |
-          find . -name "prepare_vendor.sh" -exec sed -i '/cp.*zsmalloc\.ko\|cp.*zram\.ko/s/^/#/' {} \;
-          find . -name "BUILD.bazel" -exec sed -i '/zram\.ko\|zsmalloc\.ko\|ssg\.ko/d' {} \;
-          echo "✅ 已清理 prepare_vendor.sh 和所有 BUILD.bazel 中的 zram/zsmalloc/ssg"
+          # 1. 删除 prepare_vendor.sh 里的强制复制行
+          FILE="kernel_platform/build/kernel/android/prepare_vendor.sh"
+          if [ -f "$FILE" ]; then
+            grep -v "cp.*zsmalloc\.ko\|cp.*zram\.ko" "$FILE" > /tmp/prepare_vendor_clean.sh
+            mv /tmp/prepare_vendor_clean.sh "$FILE"
+            chmod +x "$FILE"
+            echo "✅ 已删除 $FILE 中的 zram/zsmalloc 强制复制"
+          else
+            echo "⚠️ $FILE 未找到，跳过"
+          fi
+
+          # 2. 删除两个 BUILD.bazel 里的相关行
+          for F in kernel_platform/common/BUILD.bazel kernel_platform/msm-kernel/BUILD.bazel; do
+            if [ -f "$F" ]; then
+              sed -i '/zram\.ko\|zsmalloc\.ko\|ssg\.ko/d' "$F"
+              echo "✅ 已清理 $F"
+            else
+              echo "⚠️ $F 未找到，跳过"
+            fi
+          done
+
+          echo "✅ 精准清理完成"
          
       - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
