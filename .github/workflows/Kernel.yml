@@ -33,12 +33,12 @@ jobs:
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
 
-      - name: 注释掉 prepare_vendor 强制复制
+      - name: 一键清理所有残留模块引用
         shell: bash
         run: |
-         grep -v "cp.*zsmalloc\.ko\|cp.*zram\.ko" kernel_platform/build/kernel/android/prepare_vendor.sh > /tmp/prepare_vendor_clean.sh
-         mv /tmp/prepare_vendor_clean.sh kernel_platform/build/kernel/android/prepare_vendor.sh
-         chmod +x kernel_platform/build/kernel/android/prepare_vendor.sh
+          find . -name "prepare_vendor.sh" -exec sed -i '/cp.*zsmalloc\.ko\|cp.*zram\.ko/s/^/#/' {} \;
+          find . -name "BUILD.bazel" -exec sed -i '/zram\.ko\|zsmalloc\.ko\|ssg\.ko/d' {} \;
+          echo "✅ 已清理 prepare_vendor.sh 和所有 BUILD.bazel 中的 zram/zsmalloc/ssg"
          
       - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
