@@ -53,8 +53,8 @@ jobs:
           kernel_version: '6.6'
           os_patch_level: '2025-03-01'
           sublevel: '30'
-          apply_ksu_patch: ${{ github.event.inputs.su != '' }}
-
+          apply_ksu_patch: ${{ github.event.inputs.su != 'None' }}
+          
       - name: 编译打包上传全套
         uses: ./.github/actions/build-finish
         with:
