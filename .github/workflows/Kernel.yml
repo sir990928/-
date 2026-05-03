@@ -56,3 +56,16 @@ jobs:
         uses: ./.github/actions/build-finish
         with:
           su-type: ${{ github.event.inputs.su }}
+
+      - name: 打包工作目录 device + kernel_platform/gki
+        run: |
+          tar -zcvf device_full.tar.gz device/
+          tar -zcvf gki_full.tar.gz kernel_platform/gki/
+
+      - name: 上传打包目录到工件
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-gki-workdir-backup
+          path: |
+            device_full.tar.gz
+            gki_full.tar.gz
