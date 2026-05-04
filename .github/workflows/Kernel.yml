@@ -14,6 +14,14 @@ on:
           - SukiSU-Ultra
           - KernelSU-Next
           - ReSukiSU
+      upload_mode:
+        description: "选择上传方式"
+        required: true
+        default: "artifact"
+        type: choice
+        options:
+          - release
+          - artifact
 
 jobs:
   build:
@@ -32,7 +40,7 @@ jobs:
         run: |
           git fetch origin config-deploy --depth 1 --no-tags
           git checkout --force origin/config-deploy -- .
-         
+
       - name: 碎片合成与授权
         uses: ./.github/actions/merge-files
 
@@ -56,3 +64,4 @@ jobs:
         uses: ./.github/actions/build-finish
         with:
           su-type: ${{ github.event.inputs.su }}
+          upload-mode: ${{ github.event.inputs.upload_mode }}
