@@ -18,7 +18,7 @@ data class VerifiedPayloads(
 class PayloadRepository(private val context: Context) {
     fun loadTargets(): List<TargetProfile> {
         val commit = resolveMainCommit()
-        val manifestBytes = downloadBytes(rawUrl(commit, "support/targets-v2.json"), MAX_MANIFEST_BYTES)
+        val manifestBytes = downloadBytes(rawUrl(commit, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
         return SupportManifest.parse(manifestBytes).targets.map { profile -> profile.copy(
             exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, commit)),
             kernelSu = profile.kernelSu.copy(
@@ -134,7 +134,8 @@ class PayloadRepository(private val context: Context) {
             connectTimeout = 15_000
             readTimeout = 60_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "S25URoot/${BuildConfig.VERSION_NAME}")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            setRequestProperty("Accept", "application/vnd.github.v3+json")
             connect()
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
@@ -149,4 +150,3 @@ class PayloadRepository(private val context: Context) {
         private const val MAX_MANIFEST_BYTES = 256 * 1024
     }
 }
-
