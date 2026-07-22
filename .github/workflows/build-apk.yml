@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # 统一设置默认工作目录
+    # 统一设置 run 命令的默认工作目录
     defaults:
       run:
         working-directory: ./Root-My-Galaxy-main
@@ -41,6 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Root-My-Galaxy-Debug-APK
-          path: 应用程序/build/outputs/apk/debug/*.apk
+          # 修正路径：必须从根目录写起，且模块名是 app
+          path: Root-My-Galaxy-main/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
