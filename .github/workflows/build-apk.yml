@@ -9,37 +9,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 检出仓库代码
+      - name: 检出代码
         uses: actions/checkout@v4
 
-      # 打印目录列表，排查文件是否拉取成功
-      - name: 列出根目录文件
+      - name: 打印根目录文件
         run: ls -la
 
-      - name: 配置JDK17
+      - name: 设置JDK17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
 
-      # 如果gradlew存在赋予权限，不存在不会直接崩溃
-      - name: 添加gradlew执行权限
-        run: |
-          if [ -f ./gradlew ]; then
-            chmod +x gradlew
-          else
-            echo "警告：仓库内缺少gradlew！"
-            ls -la
-            exit 1
-          fi
+      - name: 添加gradlew权限
+        run: chmod +x gradlew
 
       - name: 编译Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: 上传APK产物
+      - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: Root-My-Galaxy-Debug-APK
+          name: Root-My-Galaxy-Debug
           path: 应用程序/build/outputs/apk/debug/*.apk
 
