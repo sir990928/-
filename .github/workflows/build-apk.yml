@@ -9,28 +9,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 检出代码
+      - name: 检出仓库代码
         uses: actions/checkout@v4
 
-      - name: 打印根目录文件
+      - name: 查看顶层目录
         run: ls -la
+      
+      # 重点：进入源码子文件夹
+      - name: 进入源码目录
+        run: cd Root-My-Galaxy-main
 
-      - name: 设置JDK17
+      - name: 配置JDK17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
 
-      - name: 添加gradlew权限
+      - name: 赋予gradlew执行权限
+        working-directory: ./Root-My-Galaxy-main
         run: chmod +x gradlew
 
       - name: 编译Debug APK
+        working-directory: ./Root-My-Galaxy-main
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: 上传APK
+      - name: 上传编译后的APK
         uses: actions/upload-artifact@v4
         with:
-          name: Root-My-Galaxy-Debug
-          path: 应用程序/build/outputs/apk/debug/*.apk
+          name: Root-My-Galaxy-Debug-APK
+          path: Root-My-Galaxy-main/应用程序/build/outputs/apk/debug/*.apk
 
