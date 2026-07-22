@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # 统一设置默认工作目录，避免每个步骤都写 cd 或 working-directory
+    # 统一设置默认工作目录
     defaults:
       run:
         working-directory: ./Root-My-Galaxy-main
@@ -17,19 +17,17 @@ jobs:
     steps:
       - name: 检出仓库代码
         uses: actions/checkout@v4
-        # 因为设置了默认工作目录，checkout 需要指定 working-directory 可能导致异常，
-        # 因此这里显式让 checkout 在根目录执行
         with:
           persist-credentials: false
 
       - name: 查看顶层目录
         run: ls -la
-        working-directory: . # 覆盖全局默认目录，回到根目录查看
+        working-directory: .
 
-      - name: 配置 JDK 17
+      - name: 配置 JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: 'gradle'
 
@@ -44,5 +42,5 @@ jobs:
         with:
           name: Root-My-Galaxy-Debug-APK
           path: 应用程序/build/outputs/apk/debug/*.apk
-          retention-days: 7 # 设置制品保留天数（可选，默认 90 天）
+          retention-days: 7
 
