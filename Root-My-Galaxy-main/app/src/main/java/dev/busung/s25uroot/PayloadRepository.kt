@@ -145,7 +145,8 @@ class PayloadRepository(private val context: Context) {
             "https://api.github.com/repos/sir990928/-/git/ref/heads/main"
         private const val RAW_REPOSITORY =
             "https://raw.githubusercontent.com/sir990928/-"
-        private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/"
+        // 加上了 Root-My-Galaxy-Payloads-main/ 前缀以匹配你的目录结构
+        private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/Root-My-Galaxy-Payloads-main/"
         private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
         private const val MAX_MANIFEST_BYTES = 256 * 1024
     }
