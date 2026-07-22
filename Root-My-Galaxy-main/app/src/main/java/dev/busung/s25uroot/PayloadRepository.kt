@@ -1,4 +1,4 @@
-Package dev.busung.s25uroot
+package dev.busung.s25uroot
 
 import android.content.Context
 import android.system.Os
