@@ -99,8 +99,8 @@ class PayloadRepository(private val context: Context) {
     private fun resolveMainCommit(): String {
         val response = downloadBytes(COMMIT_API_URL, MAX_COMMIT_RESPONSE_BYTES)
         val text = response.toString(Charsets.UTF_8)
-        // 防御性判断：如果返回HTML直接抛出明确错误
-        require(!text.contains("<!DOCTYPE")) { "API接口返回HTML，网络/代理异常" }
+        // 检测HTML页面，提前抛出友好错误
+        require(!text.contains("<!DOCTYPE")) { "GitHub接口访问失败，网络镜像无法正常使用" }
         val commit = JSONObject(text)
             .getJSONObject("object")
             .getString("sha")
@@ -146,12 +146,16 @@ class PayloadRepository(private val context: Context) {
         }
 
     private fun wrapUrl(originalUrl: String): String {
-        // ⚠️核心修复：Github API 禁止走代理！
-        if (originalUrl.startsWith(COMMIT_API_URL)) {
+        if (!enableProxy) return originalUrl
+        // 防止重复套代理
+        if (originalUrl.startsWith("https://ghproxy.com/") || originalUrl.startsWith("https://api.ghproxy.com/")) {
             return originalUrl
         }
-        if (!enableProxy) return originalUrl
-        if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
+        // GitHub API 使用独立镜像
+        if (originalUrl.startsWith("https://api.github.com")) {
+            return originalUrl.replace("https://api.github.com", "https://api.ghproxy.com")
+        }
+        // raw静态资源使用ghproxy
         return "https://ghproxy.com/$originalUrl"
     }
 
