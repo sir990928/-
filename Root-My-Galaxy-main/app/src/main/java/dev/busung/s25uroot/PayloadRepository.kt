@@ -15,7 +15,7 @@ data class VerifiedPayloads(
 )
 
 class PayloadRepository(private val context: Context) {
-    var enableProxy: Boolean = true
+    var enableProxy: Boolean = false // 默认关闭失效的ghproxy，改为直连
 
     // ===================== 请在此处填入你仓库 main 分支最新的 40 位 Commit 哈希 =====================
     private val FIXED_MAIN_COMMIT = "在此处填入main分支最新40位commit哈希"
@@ -100,7 +100,6 @@ class PayloadRepository(private val context: Context) {
     private fun rawUrl(commit: String, path: String) = "$RAW_REPOSITORY/$commit/$path"
 
     private fun pinArtifactUrl(url: String, commit: String): String {
-        // 放宽前缀检查，兼容不同分支或自定义路径，直接重写并绑定当前的 FIXED_MAIN_COMMIT
         val relativePath = when {
             url.contains("Root-My-Galaxy-Payloads-main/") -> url.substringAfter("Root-My-Galaxy-Payloads-main/")
             url.contains("artifacts/") -> "artifacts/" + url.substringAfter("artifacts/")
@@ -140,9 +139,8 @@ class PayloadRepository(private val context: Context) {
         }
 
     private fun wrapUrl(originalUrl: String): String {
-        if (!enableProxy) return originalUrl
-        if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
-        return "https://ghproxy.com/$originalUrl"
+        // 直接返回原始链接，不再走失效的 ghproxy
+        return originalUrl
     }
 
     companion object {
