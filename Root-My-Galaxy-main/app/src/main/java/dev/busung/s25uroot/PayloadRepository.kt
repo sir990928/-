@@ -16,7 +16,6 @@ data class VerifiedPayloads(
 )
 
 class PayloadRepository(private val context: Context) {
-    // ============ 新增：代理开关，后续可接入 SharedPreferences 设置 ============
     var enableProxy: Boolean = true
 
     fun loadTargets(): List<TargetProfile> {
@@ -67,7 +66,6 @@ class PayloadRepository(private val context: Context) {
     ): File {
         onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        // 使用包装后的链接
         val connection = open(wrapUrl(artifact.url))
         require(connection.contentLengthLong == -1L || connection.contentLengthLong == artifact.size) {
             context.getString(R.string.repo_size_mismatch, label)
@@ -100,7 +98,10 @@ class PayloadRepository(private val context: Context) {
 
     private fun resolveMainCommit(): String {
         val response = downloadBytes(COMMIT_API_URL, MAX_COMMIT_RESPONSE_BYTES)
-        val commit = JSONObject(response.toString(Charsets.UTF_8))
+        val text = response.toString(Charsets.UTF_8)
+        // 防御性判断：如果返回HTML直接抛出明确错误
+        require(!text.contains("<!DOCTYPE")) { "API接口返回HTML，网络/代理异常" }
+        val commit = JSONObject(text)
             .getJSONObject("object")
             .getString("sha")
         require(commit.matches(Regex("[0-9a-f]{40}"))) { context.getString(R.string.repo_commit_invalid) }
@@ -144,10 +145,12 @@ class PayloadRepository(private val context: Context) {
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
 
-    // ============ 新增：URL代理包装函数 ============
     private fun wrapUrl(originalUrl: String): String {
+        // ⚠️核心修复：Github API 禁止走代理！
+        if (originalUrl.startsWith(COMMIT_API_URL)) {
+            return originalUrl
+        }
         if (!enableProxy) return originalUrl
-        // 防止重复嵌套ghproxy
         if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
         return "https://ghproxy.com/$originalUrl"
     }
