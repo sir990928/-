@@ -15,21 +15,12 @@ data class VerifiedPayloads(
 )
 
 class PayloadRepository(private val context: Context) {
-    var enableProxy: Boolean = false // 默认关闭失效的ghproxy，改为直连
-
-    // ===================== 请在此处填入你仓库 main 分支最新的 40 位 Commit 哈希 =====================
-    private val FIXED_MAIN_COMMIT = "在此处填入main分支最新40位commit哈希"
 
     fun loadTargets(): List<TargetProfile> {
-        val manifestBytes = downloadBytes(rawUrl(FIXED_MAIN_COMMIT, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
-        return SupportManifest.parse(manifestBytes).targets.map { profile -> profile.copy(
-            exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, FIXED_MAIN_COMMIT)),
-            kernelSu = profile.kernelSu.copy(
-                artifact = profile.kernelSu.artifact.copy(
-                    url = pinArtifactUrl(profile.kernelSu.artifact.url, FIXED_MAIN_COMMIT),
-                ),
-            ),
-        ) }
+        // 直接请求你仓库中固定的 raw 链接，彻底摆脱 commit 和 api 限制
+        val manifestUrl = "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
+        val manifestBytes = downloadBytes(manifestUrl, MAX_MANIFEST_BYTES)
+        return SupportManifest.parse(manifestBytes).targets
     }
 
     fun resolveTarget(snapshot: DeviceSnapshot): TargetProfile = loadTargets()
@@ -67,7 +58,7 @@ class PayloadRepository(private val context: Context) {
     ): File {
         onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        val connection = open(wrapUrl(artifact.url))
+        val connection = open(artifact.url) // 直接使用 json 里写好的完整 raw 链接
         require(connection.contentLengthLong == -1L || connection.contentLengthLong == artifact.size) {
             context.getString(R.string.repo_size_mismatch, label)
         }
@@ -97,20 +88,8 @@ class PayloadRepository(private val context: Context) {
         return destination
     }
 
-    private fun rawUrl(commit: String, path: String) = "$RAW_REPOSITORY/$commit/$path"
-
-    private fun pinArtifactUrl(url: String, commit: String): String {
-        val relativePath = when {
-            url.contains("Root-My-Galaxy-Payloads-main/") -> url.substringAfter("Root-My-Galaxy-Payloads-main/")
-            url.contains("artifacts/") -> "artifacts/" + url.substringAfter("artifacts/")
-            url.contains("kernelsu/") -> "kernelsu/" + url.substringAfter("kernelsu/")
-            else -> url.substringAfterLast("/")
-        }
-        return "$RAW_REPOSITORY/$commit/Root-My-Galaxy-Payloads-main/$relativePath".replace("(?<!g:/)(?<!s:)//".toRegex(), "/")
-    }
-
     private fun downloadBytes(url: String, maximum: Int): ByteArray {
-        val connection = open(wrapUrl(url))
+        val connection = open(url)
         val bytes = connection.inputStream.use { input ->
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -138,15 +117,7 @@ class PayloadRepository(private val context: Context) {
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
 
-    private fun wrapUrl(originalUrl: String): String {
-        // 直接返回原始链接，不再走失效的 ghproxy
-        return originalUrl
-    }
-
     companion object {
-        private const val RAW_REPOSITORY =
-            "https://raw.githubusercontent.com/sir990928/-"
-        private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/Root-My-Galaxy-Payloads-main/"
         private const val MAX_MANIFEST_BYTES = 256 * 1024
     }
 }
