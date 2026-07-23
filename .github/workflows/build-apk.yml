@@ -9,7 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # 统一设置 run 命令的默认工作目录
     defaults:
       run:
         working-directory: ./Root-My-Galaxy-main
@@ -34,14 +33,18 @@ jobs:
       - name: 赋予 gradlew 执行权限
         run: chmod +x gradlew
 
-      - name: 编译 Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: 编译 Release 正式 APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: 上传编译后的 APK
+      - name: 打包 APK 为压缩包
+        run: |
+          mkdir -p ./release_out
+          cp app/build/outputs/apk/release/*.apk ./release_out/
+          zip -j Root-My-Galaxy-Release.zip ./release_out/*.apk
+
+      - name: 上传压缩后的 Release 包
         uses: actions/upload-artifact@v4
         with:
-          name: Root-My-Galaxy-Debug-APK
-          # 修正路径：必须从根目录写起，且模块名是 app
-          path: Root-My-Galaxy-main/app/build/outputs/apk/debug/*.apk
+          name: Root-My-Galaxy-Release-Zip
+          path: Root-My-Galaxy-main/Root-My-Galaxy-Release.zip
           retention-days: 7
-
