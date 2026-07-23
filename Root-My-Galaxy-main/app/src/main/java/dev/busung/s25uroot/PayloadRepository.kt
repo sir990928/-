@@ -17,11 +17,10 @@ data class VerifiedPayloads(
 class PayloadRepository(private val context: Context) {
     var enableProxy: Boolean = true
 
-    // ===================== 硬编码main分支Commit SHA，替换成你仓库最新main分支sha =====================
+    // ===================== 请在此处填入你仓库 main 分支最新的 40 位 Commit 哈希 =====================
     private val FIXED_MAIN_COMMIT = "在此处填入main分支最新40位commit哈希"
 
     fun loadTargets(): List<TargetProfile> {
-        // 不再网络请求获取commit，直接使用固定值
         val manifestBytes = downloadBytes(rawUrl(FIXED_MAIN_COMMIT, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
         return SupportManifest.parse(manifestBytes).targets.map { profile -> profile.copy(
             exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, FIXED_MAIN_COMMIT)),
@@ -101,8 +100,14 @@ class PayloadRepository(private val context: Context) {
     private fun rawUrl(commit: String, path: String) = "$RAW_REPOSITORY/$commit/$path"
 
     private fun pinArtifactUrl(url: String, commit: String): String {
-        require(url.startsWith(MUTABLE_RAW_PREFIX)) { context.getString(R.string.repo_url_invalid) }
-        return "$RAW_REPOSITORY/$commit/${url.removePrefix(MUTABLE_RAW_PREFIX)}"
+        // 放宽前缀检查，兼容不同分支或自定义路径，直接重写并绑定当前的 FIXED_MAIN_COMMIT
+        val relativePath = when {
+            url.contains("Root-My-Galaxy-Payloads-main/") -> url.substringAfter("Root-My-Galaxy-Payloads-main/")
+            url.contains("artifacts/") -> "artifacts/" + url.substringAfter("artifacts/")
+            url.contains("kernelsu/") -> "kernelsu/" + url.substringAfter("kernelsu/")
+            else -> url.substringAfterLast("/")
+        }
+        return "$RAW_REPOSITORY/$commit/Root-My-Galaxy-Payloads-main/$relativePath".replace("(?<!g:/)(?<!s:)//".toRegex(), "/")
     }
 
     private fun downloadBytes(url: String, maximum: Int): ByteArray {
@@ -136,7 +141,6 @@ class PayloadRepository(private val context: Context) {
 
     private fun wrapUrl(originalUrl: String): String {
         if (!enableProxy) return originalUrl
-        // 防止重复嵌套ghproxy
         if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
         return "https://ghproxy.com/$originalUrl"
     }
