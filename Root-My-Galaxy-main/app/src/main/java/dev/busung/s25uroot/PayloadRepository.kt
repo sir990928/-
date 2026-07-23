@@ -7,6 +7,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.IOException
 
 data class VerifiedPayloads(
     val profile: TargetProfile,
@@ -16,9 +17,17 @@ data class VerifiedPayloads(
 
 class PayloadRepository(private val context: Context) {
 
+    // 双源配置：优先Github，失败自动切Gitee
+    private val manifestUrlList = listOf(
+        // 主源：github
+        "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json",
+        // 备用源：你的Gitee镜像
+        "https://gitee.com/lin0928/samsung-root/raw/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
+    )
+
     fun loadTargets(): List<TargetProfile> {
-        val manifestUrl = "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
-        val manifestBytes = downloadBytes(manifestUrl, MAX_MANIFEST_BYTES)
+        // 自动轮询尝试多个地址
+        val manifestBytes = tryDownloadUrl(manifestUrlList, MAX_MANIFEST_BYTES)
         return SupportManifest.parse(manifestBytes).targets
     }
 
@@ -57,9 +66,9 @@ class PayloadRepository(private val context: Context) {
     ): File {
         onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
+        // 这里后续你可以扩展payload文件双源映射，先使用原有url
         val connection = open(artifact.url)
         
-        // 已移除大小校验，直接下载保存
         var total = 0L
         connection.inputStream.use { input ->
             FileOutputStream(temporary).use { output ->
@@ -83,6 +92,20 @@ class PayloadRepository(private val context: Context) {
         return destination
     }
 
+    // 新增：依次尝试多个地址，任一成功直接返回
+    private fun tryDownloadUrl(urlCandidates: List<String>, maximum: Int): ByteArray {
+        var lastException: Exception? = null
+        for(url in urlCandidates) {
+            try {
+                return downloadBytes(url, maximum)
+            } catch (e: Exception) {
+                lastException = e
+                continue
+            }
+        }
+        throw lastException ?: IOException("所有数据源均无法连接")
+    }
+
     private fun downloadBytes(url: String, maximum: Int): ByteArray {
         val connection = open(url)
         val bytes = connection.inputStream.use { input ->
@@ -104,7 +127,7 @@ class PayloadRepository(private val context: Context) {
 
     private fun open(url: String): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
+            connectTimeout = 10_000 // 缩短超时，快速切备用源
             readTimeout = 60_000
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
