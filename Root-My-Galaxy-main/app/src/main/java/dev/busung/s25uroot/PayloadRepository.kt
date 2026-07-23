@@ -16,6 +16,9 @@ data class VerifiedPayloads(
 )
 
 class PayloadRepository(private val context: Context) {
+    // ============ 新增：代理开关，后续可接入 SharedPreferences 设置 ============
+    var enableProxy: Boolean = true
+
     fun loadTargets(): List<TargetProfile> {
         val commit = resolveMainCommit()
         val manifestBytes = downloadBytes(rawUrl(commit, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
@@ -64,7 +67,8 @@ class PayloadRepository(private val context: Context) {
     ): File {
         onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        val connection = open(artifact.url)
+        // 使用包装后的链接
+        val connection = open(wrapUrl(artifact.url))
         require(connection.contentLengthLong == -1L || connection.contentLengthLong == artifact.size) {
             context.getString(R.string.repo_size_mismatch, label)
         }
@@ -111,7 +115,7 @@ class PayloadRepository(private val context: Context) {
     }
 
     private fun downloadBytes(url: String, maximum: Int): ByteArray {
-        val connection = open(url)
+        val connection = open(wrapUrl(url))
         val bytes = connection.inputStream.use { input ->
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -140,12 +144,19 @@ class PayloadRepository(private val context: Context) {
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
 
+    // ============ 新增：URL代理包装函数 ============
+    private fun wrapUrl(originalUrl: String): String {
+        if (!enableProxy) return originalUrl
+        // 防止重复嵌套ghproxy
+        if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
+        return "https://ghproxy.com/$originalUrl"
+    }
+
     companion object {
         private const val COMMIT_API_URL =
             "https://api.github.com/repos/sir990928/-/git/ref/heads/main"
         private const val RAW_REPOSITORY =
             "https://raw.githubusercontent.com/sir990928/-"
-        // 加上了 Root-My-Galaxy-Payloads-main/ 前缀以匹配你的目录结构
         private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/Root-My-Galaxy-Payloads-main/"
         private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
         private const val MAX_MANIFEST_BYTES = 256 * 1024
