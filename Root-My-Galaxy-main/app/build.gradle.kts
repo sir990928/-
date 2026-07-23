@@ -22,13 +22,33 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
+                // CMake原生二进制瘦身
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
+                cppFlags += "-Os" // 体积优先优化
+                cppFlags += "-fvisibility=hidden"
             }
+        }
+    }
+
+    // ========== 新增Release混淆压缩配置 ==========
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            // debug不开启混淆，方便调试
+            isMinifyEnabled = false
         }
     }
 
     buildFeatures {
         compose = true
-        buildConfig = true
+        buildConfig = false // 不需要BuildConfig常量直接关闭，省方法数
     }
 
     externalNativeBuild {
@@ -46,6 +66,8 @@ android {
     packaging {
         jniLibs.useLegacyPackaging = true
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // 剔除多余调试文件
+        resources.excludes += "**/*.version"
     }
 }
 
@@ -68,7 +90,16 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.5.0-alpha24")
-    implementation("androidx.compose.material:material-icons-extended")
+
+    // =====================【重中之重修改】=====================
+    // 删除全量图标库 material-icons-extended !!!
+    // implementation("androidx.compose.material:material-icons-extended")
+
+    // 按需引入图标包（你用哪组就加哪组，极大缩减方法&资源体积）
+    // implementation("androidx.compose.material:material-icons-outlined")
+    // implementation("androidx.compose.material:material-icons-filled")
+    // =========================================================
+
     implementation("com.materialkolor:material-kolor:4.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
