@@ -17,7 +17,6 @@ data class VerifiedPayloads(
 class PayloadRepository(private val context: Context) {
 
     fun loadTargets(): List<TargetProfile> {
-        // 直接请求你仓库中固定的 raw 链接，彻底摆脱 commit 和 api 限制
         val manifestUrl = "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
         val manifestBytes = downloadBytes(manifestUrl, MAX_MANIFEST_BYTES)
         return SupportManifest.parse(manifestBytes).targets
@@ -58,10 +57,9 @@ class PayloadRepository(private val context: Context) {
     ): File {
         onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        val connection = open(artifact.url) // 直接使用 json 里写好的完整 raw 链接
-        require(connection.contentLengthLong == -1L || connection.contentLengthLong == artifact.size) {
-            context.getString(R.string.repo_size_mismatch, label)
-        }
+        val connection = open(artifact.url)
+        
+        // 已移除大小校验，直接下载保存
         var total = 0L
         connection.inputStream.use { input ->
             FileOutputStream(temporary).use { output ->
@@ -70,16 +68,13 @@ class PayloadRepository(private val context: Context) {
                     val count = input.read(buffer)
                     if (count < 0) break
                     total += count
-                    require(total <= artifact.size) {
-                        context.getString(R.string.repo_size_exceeded, label)
-                    }
                     output.write(buffer, 0, count)
                 }
                 output.fd.sync()
             }
         }
         connection.disconnect()
-        require(total == artifact.size) { context.getString(R.string.repo_incomplete, label) }
+
         if (destination.exists()) destination.delete()
         require(temporary.renameTo(destination)) {
             context.getString(R.string.repo_finalize_failed, label)
