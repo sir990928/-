@@ -7,7 +7,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import org.json.JSONObject
 
 data class VerifiedPayloads(
     val profile: TargetProfile,
@@ -18,14 +17,17 @@ data class VerifiedPayloads(
 class PayloadRepository(private val context: Context) {
     var enableProxy: Boolean = true
 
+    // ===================== 硬编码main分支Commit SHA，替换成你仓库最新main分支sha =====================
+    private val FIXED_MAIN_COMMIT = "在此处填入main分支最新40位commit哈希"
+
     fun loadTargets(): List<TargetProfile> {
-        val commit = resolveMainCommit()
-        val manifestBytes = downloadBytes(rawUrl(commit, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
+        // 不再网络请求获取commit，直接使用固定值
+        val manifestBytes = downloadBytes(rawUrl(FIXED_MAIN_COMMIT, "Root-My-Galaxy-Payloads-main/support/targets-v2.json"), MAX_MANIFEST_BYTES)
         return SupportManifest.parse(manifestBytes).targets.map { profile -> profile.copy(
-            exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, commit)),
+            exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, FIXED_MAIN_COMMIT)),
             kernelSu = profile.kernelSu.copy(
                 artifact = profile.kernelSu.artifact.copy(
-                    url = pinArtifactUrl(profile.kernelSu.artifact.url, commit),
+                    url = pinArtifactUrl(profile.kernelSu.artifact.url, FIXED_MAIN_COMMIT),
                 ),
             ),
         ) }
@@ -96,18 +98,6 @@ class PayloadRepository(private val context: Context) {
         return destination
     }
 
-    private fun resolveMainCommit(): String {
-        val response = downloadBytes(COMMIT_API_URL, MAX_COMMIT_RESPONSE_BYTES)
-        val text = response.toString(Charsets.UTF_8)
-        // 检测HTML页面，提前抛出友好错误
-        require(!text.contains("<!DOCTYPE")) { "GitHub接口访问失败，网络镜像无法正常使用" }
-        val commit = JSONObject(text)
-            .getJSONObject("object")
-            .getString("sha")
-        require(commit.matches(Regex("[0-9a-f]{40}"))) { context.getString(R.string.repo_commit_invalid) }
-        return commit
-    }
-
     private fun rawUrl(commit: String, path: String) = "$RAW_REPOSITORY/$commit/$path"
 
     private fun pinArtifactUrl(url: String, commit: String): String {
@@ -140,32 +130,21 @@ class PayloadRepository(private val context: Context) {
             readTimeout = 60_000
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            setRequestProperty("Accept", "application/vnd.github.v3+json")
             connect()
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
 
     private fun wrapUrl(originalUrl: String): String {
         if (!enableProxy) return originalUrl
-        // 防止重复套代理
-        if (originalUrl.startsWith("https://ghproxy.com/") || originalUrl.startsWith("https://api.ghproxy.com/")) {
-            return originalUrl
-        }
-        // GitHub API 使用独立镜像
-        if (originalUrl.startsWith("https://api.github.com")) {
-            return originalUrl.replace("https://api.github.com", "https://api.ghproxy.com")
-        }
-        // raw静态资源使用ghproxy
+        // 防止重复嵌套ghproxy
+        if (originalUrl.startsWith("https://ghproxy.com/")) return originalUrl
         return "https://ghproxy.com/$originalUrl"
     }
 
     companion object {
-        private const val COMMIT_API_URL =
-            "https://api.github.com/repos/sir990928/-/git/ref/heads/main"
         private const val RAW_REPOSITORY =
             "https://raw.githubusercontent.com/sir990928/-"
         private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/Root-My-Galaxy-Payloads-main/"
-        private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
         private const val MAX_MANIFEST_BYTES = 256 * 1024
     }
 }
