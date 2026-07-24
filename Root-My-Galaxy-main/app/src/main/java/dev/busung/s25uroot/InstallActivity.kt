@@ -55,6 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp // 【关键修复导入】
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.busung.s25uroot.ui.theme.RootMyGalaxyTheme
 import kotlinx.coroutines.delay
@@ -343,7 +344,6 @@ private fun InstallerLog(
                 }
             }
 
-            // 修复：SelectionContainer外层包裹，避免嵌套滚动冲突
             SelectionContainer {
                 Column(
                     modifier = Modifier
