@@ -43,7 +43,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
@@ -708,15 +707,13 @@ private fun HistoryDetail(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 ),
             ) {
-                SelectionContainer {
-                    Text(
-                        text = entry.log.ifBlank { stringResource(R.string.history_log_empty) },
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                Text(
+                    text = entry.log.ifBlank { stringResource(R.string.history_log_empty) },
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }
@@ -1167,3 +1164,242 @@ private fun ThemeModeSelector(
         themeModes.forEachIndexed { index, mode ->
             ToggleButton(
                 checked = themeMode == mode,
+                onCheckedChange = { onThemeModeChanged(mode) },
+                modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
+                colors = ToggleButtonDefaults.toggleButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    themeModes.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp),
+            ) {
+                Icon(
+                    imageVector = when (mode) {
+                        AppThemeMode.System -> Icons.Rounded.BrightnessAuto
+                        AppThemeMode.Light -> Icons.Rounded.LightMode
+                        AppThemeMode.Dark -> Icons.Rounded.DarkMode
+                    },
+                    contentDescription = null,
+                )
+                Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                Text(themeModeLabel(mode), maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun expressiveClickableCardShape(
+    interactionSource: MutableInteractionSource,
+    position: SettingsCardPosition = SettingsCardPosition.Single,
+): RoundedCornerShape {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val topRadius by animateDpAsState(
+        targetValue = when {
+            pressed -> 28.dp
+            position == SettingsCardPosition.Single -> 16.dp
+            position in setOf(SettingsCardPosition.GroupedSingle, SettingsCardPosition.Top) -> 24.dp
+            else -> 6.dp
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "clickable-card-top-corner",
+    )
+    val bottomRadius by animateDpAsState(
+        targetValue = when {
+            pressed -> 28.dp
+            position == SettingsCardPosition.Single -> 16.dp
+            position in setOf(SettingsCardPosition.GroupedSingle, SettingsCardPosition.Bottom) -> 24.dp
+            else -> 6.dp
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "clickable-card-bottom-corner",
+    )
+    return RoundedCornerShape(
+        topStart = topRadius,
+        topEnd = topRadius,
+        bottomStart = bottomRadius,
+        bottomEnd = bottomRadius,
+    )
+}
+
+@Composable
+private fun SideChoiceMenu(
+    choices: List<String>,
+    selectedIndex: Int,
+    topOffset: Dp,
+    onSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun closeMenu(afterAnimation: () -> Unit) {
+        if (closing) return
+        closing = true
+        visible = false
+        coroutineScope.launch {
+            delay(MENU_EXIT_WAIT_MILLIS)
+            afterAnimation()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    Popup(
+        onDismissRequest = { closeMenu(onDismiss) },
+        properties = PopupProperties(
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            clippingEnabled = false,
+        ),
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val estimatedHeight = 16.dp + 56.dp * choices.size
+            val constrainedTop = minOf(
+                topOffset,
+                maxHeight - estimatedHeight - 24.dp,
+            ).coerceAtLeast(16.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { closeMenu(onDismiss) },
+                    ),
+            )
+            AnimatedVisibility(
+                visible = visible,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = constrainedTop, end = 18.dp),
+                enter = scaleIn(
+                    animationSpec = keyframes {
+                        durationMillis = 200
+                        1.025f at 95
+                        0.995f at 155
+                    },
+                    initialScale = 0.94f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
+                exit = scaleOut(
+                    animationSpec = tween(durationMillis = MENU_EXIT_ANIMATION_MILLIS),
+                    targetScale = 0.86f,
+                    transformOrigin = TransformOrigin(1f, 0.5f),
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 160,
+                        delayMillis = 20,
+                    ),
+                ),
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .width(196.dp)
+                        .heightIn(max = 620.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        ),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                ) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        itemsIndexed(choices) { index, choice ->
+                            val selected = index == selectedIndex
+                            Surface(
+                                onClick = {
+                                    closeMenu { onSelected(index) }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = if (selected) {
+                                    MaterialTheme.shapes.extraLarge
+                                } else {
+                                    MaterialTheme.shapes.medium
+                                },
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    Color.Transparent
+                                },
+                                contentColor = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    if (selected) {
+                                        Icon(
+                                            Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                    }
+                                    Text(
+                                        text = choice,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val MENU_EXIT_ANIMATION_MILLIS = 180
+private const val MENU_EXIT_WAIT_MILLIS = 200L
+private const val ROOT_MY_GALAXY_URL = "https://github.com/BuSung-dev/Root-My-Galaxy"
+
+@Composable
+private fun languageLabel(tag: String): String = when {
+    tag.startsWith("ko") -> stringResource(R.string.language_korean)
+    tag.startsWith("en") -> stringResource(R.string.language_english)
+    tag.startsWith("ja") -> stringResource(R.string.language_japanese)
+    tag.startsWith("zh") -> stringResource(R.string.language_chinese)
+    else -> stringResource(R.string.language_system)
+}
+
+@Composable
+private fun accentLabel(color: AccentColor): String = when (color) {
+    AccentColor.Dynamic -> stringResource(R.string.color_dynamic)
+    AccentColor.Blue -> stringResource(R.string.color_blue)
+    AccentColor.Violet -> stringResource(R.string.color_violet)
+    AccentColor.Green -> stringResource(R.string.color_green)
+    AccentColor.Orange -> stringResource(R.string.color_orange)
+}
+
+@Composable
+private fun themeModeLabel(themeMode: AppThemeMode): String = when (themeMode) {
+    AppThemeMode.System -> stringResource(R.string.theme_system)
+    AppThemeMode.Light -> stringResource(R.string.theme_light)
+    AppThemeMode.Dark -> stringResource(R.string.theme_dark)
+}
