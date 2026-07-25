@@ -19,7 +19,7 @@ class PayloadRepository(private val context: Context) {
 
     // 只保留Gitee单一源，移除Github
     private val manifestUrlList = listOf(
-        "https://gitee.com/lin0928/samsung-root/raw/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
+        "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads-main/support/targets-v2.json"
     )
 
     fun loadTargets(): List<TargetProfile> {
