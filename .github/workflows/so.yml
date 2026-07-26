@@ -1,0 +1,42 @@
+name: Build CVE Payload AYA1
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.Yml }}
+
+      - name: Install clang build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y clang make
+
+      - name: Enter makelife directory & compile
+        run: |
+          cd makelife
+          make clean
+          make TARGET=pa3q-S9380ZHU1AYA1 release
+
+      - name: Copy compiled so to artifacts folder
+        run: |
+          SRC_SO="makelife/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
+          DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
+          DST_SO="${DST_FOLDER}/cve-2026-43499-app.so"
+          
+          mkdir -p ${DST_FOLDER}
+          cp -v ${SRC_SO} ${DST_SO}
+
+      - name: Commit & push updated payload
+        run: |
+          git config --global user.name "CI Builder"
+          git config --global user.email "ci@localhost"
+          git add artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so
+          git commit -m "CI: auto build update pa3q-S9380ZHU1AYA1 cve payload" || echo "No file changes, skip commit"
+          git push
+
