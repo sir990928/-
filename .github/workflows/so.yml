@@ -1,5 +1,10 @@
 name: Build CVE Payload AYA1
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - "Root-My-Galaxy-Payloads-main/**"
+      - ".github/workflows/build-payload.yml"
   workflow_dispatch:
 
 jobs:
