@@ -91,6 +91,7 @@
 #define FOPS_TABLE_OFF FOPS_OFF
 #define SCRATCH_OFF 0x800
 #define LEFT_OFF 0xa00
+#define RIGHT_OFF 0xb00
 
 // ===== 文件操作偏移 (Kernel 6.6) =====
 #define FOPS_OWNER_OFF 0x00
@@ -140,7 +141,16 @@
 
 // ===== 其他 =====
 #define BUILD_VARIANT_LABEL "user"
-#define FAKE_TASK_PRIO 0x78
+
+// ===== ConfigFS 结构偏移 =====
+#define CFG_BIN_BUFFER_OFF 0x18
+#define CFG_BIN_BUFFER_SIZE_OFF 0x20
+#define CFG_CB_MAX_SIZE_OFF 0x28
+#define CFG_PAGE_OFF 0x30
+#define CFG_NEEDS_READ_FILL_OFF 0x38
+
+// ===== ASHMEM 相关 =====
+#define ASHMEM_NAME_PREFIX_LEN 8
 
 // ===== Fake Waiter 偏移 =====
 #define FAKE_WAITER_TREE_PRIO_OFF 0x18
