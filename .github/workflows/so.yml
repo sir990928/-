@@ -38,15 +38,20 @@ jobs:
         run: |
           cd Root-My-Galaxy-Payloads-main
           make clean
+          rm -rf build/
           make TARGET=pa3q-S9380ZHU1AYA1 TARGET_CC=aarch64-linux-android35-clang release
 
-      - name: 复制编译产物并重命名
+      - name: 复制编译产物并重命名（增加哈希校验）
         run: |
           cd Root-My-Galaxy-Payloads-main
           SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
+          echo "【编译产物哈希】"
+          sha256sum ${SRC_SO}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
           mkdir -p ${DST_FOLDER}
           cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
+          echo "【输出目录文件哈希】"
+          sha256sum ${DST_FOLDER}/cve-2026-43499-app.so
           ls -la ${DST_FOLDER}/
 
       - name: Git提交推送更新文件
@@ -56,7 +61,7 @@ jobs:
           git config --global user.email "ci@localhost"
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
           git add artifacts/pa3q-S9380ZHU1AYA1/
-          if git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload";then
+          if git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload [skip ci]";then
             git push origin HEAD:main
             echo "✅ 编译完成，文件已推送仓库"
           else
