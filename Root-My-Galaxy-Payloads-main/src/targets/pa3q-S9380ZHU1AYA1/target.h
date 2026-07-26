@@ -1,5 +1,5 @@
-#ifndef TARGET_H
-#define TARGET_H
+#ifndef OFFSET_H
+#define OFFSET_H
 
 // Target: Samsung Galaxy S25 Ultra (SM-S9380)
 // Firmware: S9380ZCU1AYA1 / S9380ZHU1AYA1
