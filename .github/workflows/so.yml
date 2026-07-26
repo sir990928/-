@@ -13,6 +13,11 @@ jobs:
           token: ${{ secrets.Yml }}
           persist-credentials: false
 
+      - name: 打印顶层目录【调试】
+        run: |
+          pwd
+          ls -la
+
       - name: 安装基础工具
         run: |
           sudo apt update
@@ -24,31 +29,34 @@ jobs:
           unzip android-ndk-r27-linux.zip
           echo "$PWD/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: 进入项目目录编译release载荷
+      - name: 进入Payload项目编译
         run: |
           cd Root-My-Galaxy-Payloads-main
+          pwd
+          ls
           make clean
           make TARGET=pa3q-S9380ZHU1AYA1 TARGET_CC=aarch64-linux-android35-clang release
 
-      - name: 复制so到artifacts目录（覆盖旧文件）
+      - name: 复制编译产物到artifacts目标目录
         run: |
           cd Root-My-Galaxy-Payloads-main
-          SRC_SO="makelife/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
+          SRC_BIN="build/pa3q-S9380ZHU1AYA1/cve-2026-43499"
+          SRC_ROOT="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
-          DST_SO="${DST_FOLDER}/cve-2026-43499-app.so"
           mkdir -p ${DST_FOLDER}
-          cp -v ${SRC_SO} ${DST_SO}
+          cp -v ${SRC_BIN} ${DST_FOLDER}/
+          cp -v ${SRC_ROOT} ${DST_FOLDER}/
 
-      - name: Git推送更新文件
+      - name: Git提交推送更新
         run: |
           cd Root-My-Galaxy-Payloads-main
           git config --global user.name "CI Builder"
           git config --global user.email "ci@localhost"
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
-          git add artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so
-          if git commit -m "CI: auto build update pa3q-S9380ZHU1AYA1 payload";then
+          git add artifacts/pa3q-S9380ZHU1AYA1/
+          if git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload";then
             git push origin HEAD:main
-            echo "✅ 新版本so已覆盖推送仓库"
+            echo "✅ 编译产物已推送仓库"
           else
             echo "ℹ️ 文件无变更，跳过提交"
           fi
