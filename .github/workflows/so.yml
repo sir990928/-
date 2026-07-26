@@ -27,7 +27,6 @@ jobs:
       - name: 进入项目目录编译release载荷
         run: |
           cd Root-My-Galaxy-Payloads-main
-          cd makelife
           make clean
           make TARGET=pa3q-S9380ZHU1AYA1 TARGET_CC=aarch64-linux-android35-clang release
 
