@@ -219,7 +219,7 @@ __attribute__((constructor)) static void load(void) {
                  offset_arg, gate_page_arg, probe_page_arg);
     } else if (!getenv("SLIDE_P0_OFFSET") &&
                atomic_load(&app_p0_state->dirty)) {
-// pr_error("p0 oracle dirtied before slide discovery; refusing unsafe retry\n");
+      pr_error("p0 oracle dirtied before slide discovery; refusing unsafe retry\n");
       break;
     }
 #endif
