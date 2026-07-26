@@ -8,7 +8,7 @@
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-root-umh"
 #endif
 #ifndef BUILD_FINGERPRINT
-#define BUILD_FINGERPRINT "samsung/pa3qzhx/pa3q:16/AP3A.240905.015.A2/S9380ZHU1AYA1:user/release-keys"
+#define BUILD_FINGERPRINT "samsung/pa3qzhx/pa3q:15/AP3A.240905.015.A2/S9380ZHU1AYA1_OZS1AYA1:user/release-keys"
 #endif
 
 #define KIMAGE_TEXT_BASE 0xffffffc080000000ULL
