@@ -11,48 +11,46 @@ jobs:
         with:
           fetch-depth: 1
           token: ${{ secrets.Yml }}
-          persist-credentials: false # 关闭内置凭证，使用我们自己的token
+          persist-credentials: false
 
-      - name: Install basic tools
+      - name: 安装基础工具
         run: |
           sudo apt update
           sudo apt install -y make wget unzip
 
-      - name: Download Android NDK 27 (Android 15 API35)
+      - name: 解压NDK r27
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
           unzip android-ndk-r27-linux.zip
           echo "$PWD/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: Enter makelife directory & compile
+      - name: 进入项目目录编译release载荷
         run: |
+          cd Root-My-Galaxy-Payloads-main
           cd makelife
           make clean
           make TARGET=pa3q-S9380ZHU1AYA1 TARGET_CC=aarch64-linux-android35-clang release
 
-      - name: Copy compiled so to artifacts folder
+      - name: 复制so到artifacts目录（覆盖旧文件）
         run: |
+          cd Root-My-Galaxy-Payloads-main
           SRC_SO="makelife/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
           DST_SO="${DST_FOLDER}/cve-2026-43499-app.so"
-          
           mkdir -p ${DST_FOLDER}
           cp -v ${SRC_SO} ${DST_SO}
 
-      - name: Git config & push payload
+      - name: Git推送更新文件
         run: |
+          cd Root-My-Galaxy-Payloads-main
           git config --global user.name "CI Builder"
           git config --global user.email "ci@localhost"
-          # 设置远程仓库使用你的Token鉴权
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
-          
           git add artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so
-          
-          # 尝试提交，捕获输出方便排错
-          if git commit -m "CI: auto build update pa3q-S9380ZHU1AYA1 cve payload"; then
+          if git commit -m "CI: auto build update pa3q-S9380ZHU1AYA1 payload";then
             git push origin HEAD:main
-            echo "✅ 文件已更新并推送远程仓库"
+            echo "✅ 新版本so已覆盖推送仓库"
           else
-            echo "ℹ️ 文件二进制无变化，跳过提交推送"
+            echo "ℹ️ 文件无变更，跳过提交"
           fi
 
