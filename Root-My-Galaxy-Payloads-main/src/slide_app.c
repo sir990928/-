@@ -898,6 +898,7 @@ int run_p0_pipe_oracle_diagnostic(int fd) {
 #endif
 
 static int slide_commit_stext(uint64_t stext, const char *source) {
+  pr_info("slide_commit_stext called stext=%016llx source=%s\n", (unsigned long long)stext, source);
   if (stext < KIMAGE_TEXT_BASE) {
     return 0;
   }
