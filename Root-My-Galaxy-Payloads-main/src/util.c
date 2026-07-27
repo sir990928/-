@@ -1,6 +1,6 @@
 #include "common.h"
 #include "kernelsnitch/kernelsnitch.h"
-
+#include <dlfcn.h>
 static struct kernelsnitch_shared_state *ks;
 static size_t mm_objs_per_slab;
 static unsigned char *skb_buf;
@@ -335,6 +335,23 @@ void init_ashmem_path(void) {
 }
 
 int open_ashmem_device(void) {
+  int fd = open(ashmem_path, O_RDWR | O_CLOEXEC);
+  if (fd >= 0) return fd;
+  
+  fd = open("/dev/ashmem", O_RDWR | O_CLOEXEC);
+  if (fd >= 0) return fd;
+  
+  void *handle = dlopen("libcutils.so", RTLD_NOW);
+  if (handle) {
+    int (*create_region)(const char *, size_t) = dlsym(handle, "ashmem_create_region");
+    if (create_region) {
+      fd = create_region("RMG", 4096);
+      dlclose(handle);
+      if (fd >= 0) return fd;
+    }
+    dlclose(handle);
+  }
+  
   return SYSCHK(open(ashmem_path, O_RDWR | O_CLOEXEC));
 }
 
