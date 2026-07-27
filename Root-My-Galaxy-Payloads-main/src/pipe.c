@@ -71,7 +71,7 @@ void init_ctx(struct mm_ctx *ctx, size_t cnt) {
 }
 
 void resize_pipe_slots(int pipefd[2], size_t slots) {
-  SYSCHK(fcntl(pipefd[0], F_SETPIPE_SZ, slots * PAGE_SIZE));
+  if (fcntl(pipefd[0], F_SETPIPE_SZ, slots * PAGE_SIZE) == -1) { pr_warning("resize_pipe_slots failed, using default size\n"); }
 }
 
 void make_pipe_object(int pipefd[2]) {
