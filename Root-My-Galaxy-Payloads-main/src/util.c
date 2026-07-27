@@ -999,7 +999,7 @@ ssize_t configfs_write_once(int fd, uintptr_t target, const void *data, size_t l
   errno = 0;
   ioctl(fd, ASHMEM_SET_SIZE, len);
   int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
-  ssize_t wr = pwrite(fd, data, len, 0); pr_info("pwrite ret=%zd errno=%d len=%zu\n", wr, errno, len);
+  ssize_t wr = pwrite(fd, data, len, 0); pr_info("pwrite ret=%zd errno=%d len=%zu\n", wr, errno, len); pr_info("pwrite ret=%zd errno=%d len=%zu\n", wr, errno, len);
   return wr;
 }
 
