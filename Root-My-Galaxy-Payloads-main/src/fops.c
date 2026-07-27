@@ -216,7 +216,7 @@ int restore_slide_boot_id(int fd) {
       slide_bootid_after == slide_bootid_want;
 
 #ifdef SLIDE_RB_PARENT_TYPE_RESTORE
-  uintptr_t parent_type = SLIDE_LOGGERS_0_1 + slide_p0_offset +
+  uintptr_t parent_type = SLIDE_NFULNL_LOGGER + slide_p0_offset +
                           sizeof(uint64_t);
   uint64_t type_before = 0;
   uint64_t type_after = 0;

