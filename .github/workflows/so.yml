@@ -45,6 +45,16 @@ jobs:
           mkdir -p ${DST_FOLDER}
           cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
 
+      - name: 复制 root-umh 到 artifacts
+        run: |
+          cd Root-My-Galaxy-Payloads-main
+          SRC_UMH="build/pa3q-S9380ZHU1AYA1/cve-2026-43499"
+          ls -la ${SRC_UMH}
+          DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
+          cp -v ${SRC_UMH} ${DST_FOLDER}/cve-2026-43499
+          echo "【root-umh 哈希】"
+          sha256sum ${DST_FOLDER}/cve-2026-43499
+
       - name: 复制 root 守护进程到 APK jniLibs
         run: |
           ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
