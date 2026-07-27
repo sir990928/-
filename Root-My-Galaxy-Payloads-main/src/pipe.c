@@ -1090,7 +1090,7 @@ uintptr_t scan_p0_pipe_oracle(void) {
 
   pr_info("p0 fingerprint changed=%d best=%d second=%d slide=%08zx\n",
           changed_pages, best_score, second_score, best_slide);
-  if (changed_pages != 1 || best_score < 2 || best_score <= second_score) {
+  if (changed_pages != 1 || best_score < 1 || best_score <= second_score) {
     return (uintptr_t)-1;
   }
   return best_slide;
