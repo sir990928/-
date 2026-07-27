@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -332,30 +331,29 @@ private fun InstallerLog(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            SelectionContainer {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(scrollState)
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("install_log", output)
-                                clipboard.setPrimaryClip(clip)
-                            }
-                        )
-                ) {
-                    Text(
-                        text = output.ifBlank { stringResource(R.string.install_preparing) },
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        softWrap = true
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("install_log", output)
+                            clipboard.setPrimaryClip(clip)
+                            android.widget.Toast.makeText(context, "完整日志已复制", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     )
-                }
+            ) {
+                Text(
+                    text = output.ifBlank { stringResource(R.string.install_preparing) },
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = true
+                )
             }
         }
     }
