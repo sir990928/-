@@ -33,12 +33,12 @@ jobs:
         run: |
           cd Root-My-Galaxy-Payloads-main
           rm -rf build/
-          make TARGET=pa3q-S9380ZHU1AYA1 API=35 release
+          make TARGET=pa3q-S9380ZHU1AYA1 API=35 all
 
       - name: 复制并校验产物 (so)
         run: |
           cd Root-My-Galaxy-Payloads-main
-          SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
+          SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so"
           echo "【so 哈希】"
           sha256sum ${SRC_SO}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
@@ -47,8 +47,9 @@ jobs:
 
       - name: 复制 root 守护进程到 APK jniLibs
         run: |
-          ROOT_BIN="Root-My-Galaxy-Payloads-main/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
-          DST_DIR="Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a"
+          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
+          ls -la ${ROOT_BIN}
+          DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a"
           mkdir -p ${DST_DIR}
           cp -v ${ROOT_BIN} ${DST_DIR}/libcve43499root.so
           echo "【root so 哈希】"
