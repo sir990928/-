@@ -18,30 +18,24 @@ jobs:
           token: ${{ secrets.Yml }}
           persist-credentials: false
 
-      - name: 打印目录结构【调试】
-        run: |
-          pwd
-          ls -la
-
       - name: 安装依赖工具
         run: |
           sudo apt update
           sudo apt install -y make wget unzip
 
-      - name: 下载并解压NDK r27
+      - name: 下载并解压 NDK r27
         run: |
-          wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
-          unzip android-ndk-r27-linux.zip
-          echo "$PWD/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q android-ndk-r27-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r27" >> $GITHUB_ENV
 
-      - name: 进入Payload项目编译漏洞程序
+      - name: 编译漏洞程序
         run: |
           cd Root-My-Galaxy-Payloads-main
-          make clean
           rm -rf build/
-          make TARGET=pa3q-S9380ZHU1AYA1 TARGET_CC=aarch64-linux-android35-clang release
+          make TARGET=pa3q-S9380ZHU1AYA1 API=35 release
 
-      - name: 复制编译产物并重命名（增加哈希校验）
+      - name: 复制并校验产物
         run: |
           cd Root-My-Galaxy-Payloads-main
           SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
@@ -52,19 +46,18 @@ jobs:
           cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
           echo "【输出目录文件哈希】"
           sha256sum ${DST_FOLDER}/cve-2026-43499-app.so
-          ls -la ${DST_FOLDER}/
 
-      - name: Git提交推送更新文件
+      - name: 提交推送产物
         run: |
           cd Root-My-Galaxy-Payloads-main
-          git config --global user.name "CI Builder"
-          git config --global user.email "ci@localhost"
+          git config user.name "CI Builder"
+          git config user.email "ci@localhost"
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
           git add artifacts/pa3q-S9380ZHU1AYA1/
-          if git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload [skip ci]";then
+          if git diff --cached --quiet; then
+            echo "ℹ️ 文件无变更，跳过提交"
+          else
+            git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload [skip ci]"
             git push origin HEAD:main
             echo "✅ 编译完成，文件已推送仓库"
-          else
-            echo "ℹ️ 文件无变更，跳过提交"
           fi
-
