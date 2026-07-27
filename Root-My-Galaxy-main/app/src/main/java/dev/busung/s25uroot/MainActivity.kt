@@ -1,5 +1,10 @@
 package dev.busung.s25uroot
 
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -707,13 +712,24 @@ private fun HistoryDetail(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 ),
             ) {
-                Text(
-                    text = entry.log.ifBlank { stringResource(R.string.history_log_empty) },
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+           val clipboard = LocalClipboardManager.current
+           val ctx = LocalContext.current
+           Text(
+                text = entry.log.ifBlank { stringResource(R.string.history_log_empty) },
+                modifier = Modifier
+                .padding(16.dp)
+                .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                clipboard.setText(AnnotatedString(entry.log))
+                Toast.makeText(ctx, "日志已复制", Toast.LENGTH_SHORT).show()
+            }
+        ),
+    style = MaterialTheme.typography.bodySmall,
+    fontFamily = FontFamily.Monospace,
+    color = MaterialTheme.colorScheme.onSurface,
+)
+
             }
         }
     }
