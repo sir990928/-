@@ -740,6 +740,7 @@ static int slide_leak_physical_base(void) {
   }
   size_t elapsed_ms = (size_t)((gettime_ns() - started) / 1000000ULL);
   pr_success("p0 physical elapsed_ms=%zu\n", elapsed_ms);
+  pr_info("p0 physical scanned offset=%08zx\n", offset);
   return slide_commit_stext(KIMAGE_TEXT_BASE + offset, "physical");
 }
 
