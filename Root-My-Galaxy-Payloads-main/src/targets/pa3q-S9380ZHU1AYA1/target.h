@@ -90,7 +90,7 @@
 
 #define SLIDE_NFULNL_LOGGER_OFF 0x02151270ULL
 #define SLIDE_LOGGERS_0_1_OFF 0x021511c0ULL
-#define SLIDE_RANDOM_BOOT_ID_DATA_OFF 0x024c2f40ULL
+#define SLIDE_RANDOM_BOOT_ID_DATA_OFF 0x024c2f28ULL
 #define SLIDE_SYSCTL_BOOTID_OFF 0x024c2f28ULL
 /* =============================================================== */
 
