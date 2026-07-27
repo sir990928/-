@@ -245,15 +245,7 @@ int install_child_root(int fd) {
 
 int try_cfi_stage(void) {
   cfi_attempts++;
-  int fd = open(ashmem_path, O_RDWR | O_CLOEXEC);
-if (fd < 0) {
-    void *handle = dlopen("libcutils.so.0", RTLD_NOW);
-    if (handle) {
-        int (*create_region)(const char *, size_t) = dlsym(handle, "ashmem_create_region");
-        if (create_region) fd = create_region("CFI", 4096);
-        dlclose(handle);
-    }
-}
+  int fd = open_ashmem_device();
   int dirty = 0;
   int can_read_back = 0;
 
