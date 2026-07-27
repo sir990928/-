@@ -903,7 +903,7 @@ static int slide_commit_stext(uint64_t stext, const char *source) {
     return 0;
   }
   uint64_t slide = stext - KIMAGE_TEXT_BASE;
-  if (slide > 0x1f0000ULL || (slide & 0xfffULL) != 0) {
+  if (slide > 0x1f0000ULL || (slide & 0xffffULL) != 0) {
     pr_warning("slide rejected source=%s stext=%016llx slide=%016llx\n",
                source, (unsigned long long)stext,
                (unsigned long long)slide);
