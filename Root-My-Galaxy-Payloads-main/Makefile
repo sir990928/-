@@ -4,7 +4,11 @@ OUTDIR ?= build/$(TARGET)
 
 TARGET_HEADER := src/targets/$(TARGET)/target.h
 TARGET_INCLUDE := targets/$(TARGET)/target.h
-TARGET_CC := clang
+TARGET_CC := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$(API)-clang
+
+ifeq ($(wildcard $(TARGET_CC)),)
+$(error set ANDROID_NDK_HOME to an Android NDK containing $(TARGET_CC))
+endif
 
 PRELOAD := $(OUTDIR)/cve-2026-43499
 APP_PRELOAD := $(OUTDIR)/cve-2026-43499-app.so
@@ -78,4 +82,3 @@ info:
 
 clean:
 	rm -rf $(OUTDIR)
-
