@@ -2,14 +2,14 @@
 #define OFFSET_H
 
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-app-physical-p0-oracle"
-#define APP_PHYS_P0_ORACLE 1
+#define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-app-pipe-slide"
+#define APP_PHYS_P0_ORACLE 0
+#define USE_PIPE_SLIDE 1
+#define USE_ASHMEM_FOPS 0
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-root-umh"
 #endif
-#ifndef BUILD_FINGERPRINT
-#define BUILD_FINGERPRINT "samsung/pa3qzhx/pa3q:15/AP3A.240905.015/S9380ZHU1AYA1:user/release-keys"
-#endif
+
 
 #define KIMAGE_TEXT_BASE 0xffffffc080000000ULL
 #define P0_PAGE_OFFSET 0xffffff8000000000ULL
