@@ -440,7 +440,7 @@ int try_put_blob_zero_at(int fd, const unsigned char *blob, size_t pos) {
 }
 
 int try_set_ashmem_name_blob(int fd, const unsigned char *blob, size_t len) {
-  if (try_put_blob_no_zeros(fd, blob, len) != 0) {
+  pr_info("ashmem_name_blob zero attempt\n"); if (try_put_blob_no_zeros(fd, blob, len) != 0) {
     return -1;
   }
 
