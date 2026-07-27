@@ -1013,7 +1013,7 @@ ssize_t configfs_read_once(int fd, uintptr_t target, void *data, size_t len) {
   }
 
   errno = 0;
-  ssize_t rd = pread(fd, data, len, pos);
+  ssize_t rd = pread(fd, data, len, pos); pr_info("pread ret=%zd errno=%d len=%zu pos=%ld\n", rd, errno, len, (long)pos);
   return rd;
 }
 
