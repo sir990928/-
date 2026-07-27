@@ -1034,6 +1034,7 @@ static int p0_fingerprint_score(
 }
 
 uintptr_t scan_p0_pipe_oracle(void) {
+  pr_info("p0 scan_p0_pipe_oracle entered\n");
   unsigned char page[PAGE_SIZE];
   size_t scan_size =
       p0_fingerprint_offsets[P0_FINGERPRINT_WORDS - 1] + sizeof(uint64_t);
