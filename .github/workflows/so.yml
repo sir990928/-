@@ -35,29 +35,36 @@ jobs:
           rm -rf build/
           make TARGET=pa3q-S9380ZHU1AYA1 API=35 release
 
-      - name: 复制并校验产物
+      - name: 复制并校验产物 (so)
         run: |
           cd Root-My-Galaxy-Payloads-main
           SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.release.so"
-          echo "【编译产物哈希】"
+          echo "【so 哈希】"
           sha256sum ${SRC_SO}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
           mkdir -p ${DST_FOLDER}
           cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
-          echo "【输出目录文件哈希】"
-          sha256sum ${DST_FOLDER}/cve-2026-43499-app.so
+
+      - name: 复制 root 守护进程到 APK jniLibs
+        run: |
+          ROOT_BIN="Root-My-Galaxy-Payloads-main/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
+          DST_DIR="Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p ${DST_DIR}
+          cp -v ${ROOT_BIN} ${DST_DIR}/libcve43499root.so
+          echo "【root so 哈希】"
+          sha256sum ${DST_DIR}/libcve43499root.so
 
       - name: 提交推送产物
         run: |
-          cd Root-My-Galaxy-Payloads-main
           git config user.name "CI Builder"
           git config user.email "ci@localhost"
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
-          git add artifacts/pa3q-S9380ZHU1AYA1/
+          git add Root-My-Galaxy-Payloads-main/artifacts/pa3q-S9380ZHU1AYA1/
+          git add Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
           if git diff --cached --quiet; then
             echo "ℹ️ 文件无变更，跳过提交"
           else
-            git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 exploit payload [skip ci]"
+            git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 [skip ci]"
             git push origin HEAD:main
             echo "✅ 编译完成，文件已推送仓库"
           fi
