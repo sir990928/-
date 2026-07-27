@@ -55,7 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.dp // 【关键修复导入】
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.busung.s25uroot.ui.theme.RootMyGalaxyTheme
 import kotlinx.coroutines.delay
@@ -372,7 +372,7 @@ private fun installPhaseDetail(phase: InstallPhase): String = stringResource(
         InstallPhase.Ready -> R.string.phase_ready
         InstallPhase.Downloading -> R.string.phase_downloading
         InstallPhase.Exploiting -> R.string.phase_exploiting
-        InstallPhase.LoadingKernelSu -> R.string.phase_ksu
+        InstallPhase.LoadingKernelSu -> R.string.phase_loading_ksu
         InstallPhase.Installed -> R.string.phase_installed
         InstallPhase.Failed -> R.string.phase_failed
     },
@@ -380,28 +380,26 @@ private fun installPhaseDetail(phase: InstallPhase): String = stringResource(
 
 private fun installProgress(phase: InstallPhase): Float = when (phase) {
     InstallPhase.Checking -> 0.1f
-    InstallPhase.Ready -> 0.2f
-    InstallPhase.Downloading -> 0.4f
-    InstallPhase.Exploiting -> 0.7f
-    InstallPhase.LoadingKernelSu -> 0.9f
+    InstallPhase.Ready -> 0f
+    InstallPhase.Downloading -> 0.3f
+    InstallPhase.Exploiting -> 0.6f
+    InstallPhase.LoadingKernelSu -> 0.85f
     InstallPhase.Installed -> 1f
-    InstallPhase.Failed -> 1f
+    InstallPhase.Failed -> 0f
 }
 
 private fun stepState(phase: InstallPhase, stepIndex: Int): Int {
-    val currentStep = when (phase) {
-        InstallPhase.Checking -> 0
-        InstallPhase.Ready -> 0
+    if (phase == InstallPhase.Installed) return 2
+    val activeIndex = when (phase) {
+        InstallPhase.Checking, InstallPhase.Ready, InstallPhase.Failed -> 0
         InstallPhase.Downloading -> 1
         InstallPhase.Exploiting -> 2
         InstallPhase.LoadingKernelSu -> 3
         InstallPhase.Installed -> 4
-        InstallPhase.Failed -> -1
     }
     return when {
-        currentStep == -1 -> 0
-        stepIndex < currentStep -> 2
-        stepIndex == currentStep -> 1
+        stepIndex < activeIndex -> 2
+        stepIndex == activeIndex -> 1
         else -> 0
     }
 }
