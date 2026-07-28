@@ -33,13 +33,13 @@ jobs:
         run: |
           cd Root-My-Galaxy-Payloads-main
           rm -rf build/
-          make j8
+          make TARGET=pa3q-S9380ZHU1AYA1 API=35 all
 
 
       - name: 复制 root-umh 到 artifacts
         run: |
           cd Root-My-Galaxy-Payloads-main
-          SRC_UMH="build/pa3q-S9380ZHU1AYA1/cve-2026-43499"
+          SRC_UMH="build/cve-2026-43499"
           ls -la ${SRC_UMH}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
           cp -v ${SRC_UMH} ${DST_FOLDER}/cve-2026-43499
