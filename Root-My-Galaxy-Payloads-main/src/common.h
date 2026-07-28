@@ -3,7 +3,6 @@
 
 #define _GNU_SOURCE
 
-#include "offset.h"
 
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
