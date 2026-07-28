@@ -444,28 +444,39 @@ static int verify_kernelsu_control(void) {
 }
 
 static int run_s25u_late_load(struct su_request *request, int conn) {
-    close(conn);
-    close_request_fds(request);
-
-    if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
-        dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
-        dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
-        fchdir(request->cwd_fd) != 0) {
-      return 126;
+    pid_t worker = fork();
+    if (worker < 0) {
+        dprintf(STDERR_FILENO, "late-load: fork failed errno=%s\n", strerror(errno));
+        return 1;
     }
 
-    char *exec_argv[] = {
-        "/system/bin/sh",
-        "/data/local/tmp/ksu-loader-selected.sh",
-        NULL
-    };
-    environ = request->envp;
-    set_root_env();
+    if (worker == 0) {
+        close(conn);
+        close_request_fds(request);
 
-    execve("/system/bin/sh", exec_argv, environ);
-    dprintf(STDERR_FILENO, "late-load: execve ksu-loader-selected.sh failed: %s\n", strerror(errno));
-    return 127;
+        if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
+            dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
+            dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
+            fchdir(request->cwd_fd) != 0) {
+          _exit(126);
+        }
+
+        char *exec_argv[] = {
+            "/system/bin/sh",
+            "/data/local/tmp/ksu-loader-selected.sh",
+            NULL
+        };
+        environ = request->envp;
+        set_root_env();
+
+        execve("/system/bin/sh", exec_argv, environ);
+        dprintf(STDERR_FILENO, "late-load: execve failed: %s\n", strerror(errno));
+        _exit(127);
+    }
+
+    return 0;
 }
+
 
 static void send_response(int conn, int status) {
   struct su_response response = {
