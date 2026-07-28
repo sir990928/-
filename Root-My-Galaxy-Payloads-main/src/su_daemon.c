@@ -444,51 +444,27 @@ static int verify_kernelsu_control(void) {
 }
 
 static int run_s25u_late_load(struct su_request *request, int conn) {
-  pid_t pid = fork();
-  if (pid < 0) {
-    return 1;
-  }
-  if (pid == 0) {
+    close(conn);
+    close_request_fds(request);
+
     if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
         dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
         dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
         fchdir(request->cwd_fd) != 0) {
-      _exit(126);
-    }
-    close(conn);
-    close_request_fds(request);
-
-    if (unshare(CLONE_NEWNS) != 0 ||
-        mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) {
-      dprintf(STDERR_FILENO, "late-load: private mount namespace: %s\n",
-              strerror(errno));
-      _exit(10);
-    }
-    if (mount(S25U_KSUD_PATH, LOGCAT_PATH, NULL, MS_BIND, NULL) != 0) {
-      dprintf(STDERR_FILENO, "late-load: bind mount: %s\n", strerror(errno));
-      _exit(11);
+      return 126;
     }
 
-    pid_t loader = fork();
-    if (loader < 0) {
-      dprintf(STDERR_FILENO, "late-load: fork: %s\n", strerror(errno));
-      _exit(12);
-    }
-    if (loader == 0) {
-      execl(LOGCAT_PATH, "logcat", "late-load", "--kmi", "android15-6.6",
-            "--package-name", "me.weishu.kernelsu", (char *)NULL);
-      dprintf(STDERR_FILENO, "late-load: exec: %s\n", strerror(errno));
-      _exit(12);
-    }
+    char *exec_argv[] = {
+        "/system/bin/sh",
+        "/data/local/tmp/ksu-loader-selected.sh",
+        NULL
+    };
+    environ = request->envp;
+    set_root_env();
 
-    int loader_status = wait_status(loader);
-    if (loader_status != 0) {
-      _exit(loader_status);
-    }
-    _exit(verify_kernelsu_control());
-  }
-  close_request_fds(request);
-  return wait_status(pid);
+    execve("/system/bin/sh", exec_argv, environ);
+    dprintf(STDERR_FILENO, "late-load: execve ksu-loader-selected.sh failed: %s\n", strerror(errno));
+    return 127;
 }
 
 static void send_response(int conn, int status) {
