@@ -57,7 +57,7 @@
 #define P0_ORACLE_PROBE_OFFSET 0x010000ULL
 
 #define P0_FINGERPRINT_HEADER \
-  "src/targets/pa3q-S9380ZHU1AYA1/p0_fingerprint.h"
+  "targets/pa3q-S9380ZHU1AYA1/p0_fingerprint.h"
 #endif
 
 #define KERNELSNITCH_IDENTITY_START 0xffffff8000000000ULL
