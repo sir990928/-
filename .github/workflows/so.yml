@@ -48,7 +48,7 @@ jobs:
 
       - name: 复制 root 守护进程到 APK jniLibs
         run: |
-          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
+          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build/cve-2026-43499-root"
           ls -la ${ROOT_BIN}
           DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a"
           mkdir -p ${DST_DIR}
