@@ -2,6 +2,7 @@
 #define COMMON_H
 
 #define _GNU_SOURCE
+#include "target.h"
 
 
 #define PAGE_SHIFT 12
