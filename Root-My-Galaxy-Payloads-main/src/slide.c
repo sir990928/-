@@ -1,4 +1,11 @@
 #include "common.h"
+#include "targets/pa3q-S9380ZHU1AYA1/target.h"
+
+#ifdef DISABLE_SLIDE_TRACEFS
+#pragma message "✅ 宏加载成功 DISABLE_SLIDE_TRACEFS=1"
+#else
+#error "❌ DISABLE_SLIDE_TRACEFS 未定义，头文件顺序错误"
+#endif
 
 #define SLIDE_TRACEFS_ROOT "/sys/kernel/tracing"
 #define SLIDE_TRACEFS_EVENT_ID 109
