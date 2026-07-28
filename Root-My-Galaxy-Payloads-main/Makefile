@@ -57,11 +57,11 @@ $(PRELOAD): $(PRELOAD_SRCS) $(TARGET_HEADER) rc/targets/pa3q-S9380ZHU1AYA1/targe
 $(ROOT_HELPER): src/su_daemon.c | $(OUTDIR)
 	$(TARGET_CC) -fPIE -pie -O2 -g0 -Wall -Wextra $< -ldl -o $@
 
-$(APP_PRELOAD): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) rc/targets/pa3q-S9380ZHU1AYA1/target.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
+$(APP_PRELOAD): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) src/targets/pa3q-S9380ZHU1AYA1/target.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
 	$(TARGET_CC) -DAPP_PAYLOAD=1 -fPIC $(COMMON_CFLAGS) $(APP_PRELOAD_SRCS) \
 	  -shared -pthread -o $@
 
-$(APP_RELEASE): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) rc/targets/pa3q-S9380ZHU1AYA1/target.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
+$(APP_RELEASE): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) src/targets/pa3q-S9380ZHU1AYA1/target.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
 	$(TARGET_CC) -DAPP_PAYLOAD=1 -fPIC -Oz -g0 \
 	  -fno-unwind-tables -fno-asynchronous-unwind-tables \
 	  -ffunction-sections -fdata-sections \
