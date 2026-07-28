@@ -21,7 +21,7 @@ jobs:
       - name: 安装依赖工具
         run: |
           sudo apt update
-          sudo apt install -y make wget unzip
+          sudo apt install -y make wget unzip zip
 
       - name: 下载并解压 NDK r27
         run: |
@@ -35,13 +35,13 @@ jobs:
           rm -rf build/
           make TARGET=pa3q-S9380ZHU1AYA1 API=35 all
 
-
       - name: 复制 root-umh 到 artifacts
         run: |
           cd Root-My-Galaxy-Payloads-main
           SRC_UMH="build/cve-2026-43499"
           ls -la ${SRC_UMH}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
+          mkdir -p ${DST_FOLDER}
           cp -v ${SRC_UMH} ${DST_FOLDER}/cve-2026-43499
           echo "【root-umh 哈希】"
           sha256sum ${DST_FOLDER}/cve-2026-43499
@@ -56,6 +56,23 @@ jobs:
           echo "【root so 哈希】"
           sha256sum ${DST_DIR}/libcve43499root.so
 
+      # ===== 打包build文件夹 =====
+      - name: 打包 build 目录为压缩包
+        run: |
+          cd Root-My-Galaxy-Payloads-main
+          zip -r build_output.zip build/
+          ls -lh build_output.zip
+          echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build_output.zip" >> $GITHUB_ENV
+
+      # =====【前置上传】先上传Artifact，不要放在git命令后面 =====
+      - name: 上传build目录zip制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: pa3q-S9380ZHU1AYA1-build-zip
+          path: ${{ env.ZIP_FILE }}
+          retention-days: 30
+
+      # ===== 最后执行git提交推送 =====
       - name: 提交推送产物
         run: |
           git config user.name "CI Builder"
