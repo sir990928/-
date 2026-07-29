@@ -269,11 +269,8 @@ int try_cfi_stage(void) {
   pr_info("cfi skip readback verify\n");
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  if (!restore_p0_oracle_pages(fd)) {
-    cfi_last_step = 10;
-    cfi_last_errno = errno;
-    goto fail;
-  }
+  // APP 模式下 configfs 不可用，跳过 P0 oracle 页面恢复
+  pr_info("cfi skip restore_p0_oracle_pages in app mode\n");
 #endif
 
   uint64_t original_fops = canon_addr(ASHMEM_FOPS);
