@@ -677,8 +677,8 @@ static int slide_restore_physical_oracle(void) {
 int app_trigger_fops_slide_route(void) {
   static size_t delay_index;
   static const int delays[] = {
-    40000, 40000, 40000, 40000, 40000, 40000,
-    40000, 40000, 40000, 40000, 40000, 40000,
+    45000, 45000, 45000, 45000, 45000, 45000,
+    45000, 45000, 45000, 45000, 45000, 45000,
 };
   if (!select_slide_payload_index(0)) {
     return 0;
