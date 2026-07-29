@@ -6,7 +6,7 @@
 
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-app-physical-p0-oracle"
-#define APP_PHYS_P0_ORACLE 1
+#define APP_PHYS_P0_ORACLE 0
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-root-umh"
 #endif
