@@ -14,7 +14,7 @@ jobs:
       - name: 检出仓库代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           token: ${{ secrets.Yml }}
           persist-credentials: false
 
@@ -56,7 +56,6 @@ jobs:
           echo "【root so 哈希】"
           sha256sum ${DST_DIR}/libcve43499root.so
 
-      # ===== 打包build文件夹 =====
       - name: 打包 build 目录为压缩包
         run: |
           cd Root-My-Galaxy-Payloads
@@ -64,7 +63,6 @@ jobs:
           ls -lh build_output.zip
           echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build_output.zip" >> $GITHUB_ENV
 
-      # =====【前置上传】先上传Artifact，不要放在git命令后面 =====
       - name: 上传build目录zip制品
         uses: actions/upload-artifact@v4
         with:
@@ -72,70 +70,6 @@ jobs:
           path: ${{ env.ZIP_FILE }}
           retention-days: 30
 
-      # ===== 最后执行git提交推送 =====
-      - name: 提交推送产物
-        run: |
-          git config user.name "CI Builder"
-          git config user.email "ci@localhost"
-          git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
-          git add Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/
-          git add Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
-          if git diff --cached --quiet; then
-            echo "ℹ️ 文件无变更，跳过提交"
-          else
-            git commit -m "CI: auto build pa3q-S9380ZHU1AYA1 [skip ci]"
-            git push origin HEAD:main
-            echo "✅ 编译完成，文件已推送仓库"
-          fi
-
-      - name: 复制并校验产物 (so)
-        run: |
-          cd Root-My-Galaxy-Payloads
-          SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so"
-          echo "【so 哈希】"
-          sha256sum ${SRC_SO}
-          DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
-          mkdir -p ${DST_FOLDER}
-          cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
-          
-      - name: 复制 root-umh 到 artifacts
-        run: |
-          cd Root-My-Galaxy-Payloads
-          SRC_UMH="build/pa3q-S9380ZHU1AYA1/cve-2026-43499"
-          ls -la ${SRC_UMH}
-          DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
-          mkdir -p ${DST_FOLDER}
-          cp -v ${SRC_UMH} ${DST_FOLDER}/cve-2026-43499
-          echo "【root-umh 哈希】"
-          sha256sum ${DST_FOLDER}/cve-2026-43499
-
-      - name: 复制 root 守护进程到 APK jniLibs
-        run: |
-          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
-          ls -la ${ROOT_BIN}
-          DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a"
-          mkdir -p ${DST_DIR}
-          cp -v ${ROOT_BIN} ${DST_DIR}/libcve43499root.so
-          echo "【root so 哈希】"
-          sha256sum ${DST_DIR}/libcve43499root.so
-
-      # ===== 打包build文件夹 =====
-      - name: 打包 build 目录为压缩包
-        run: |
-          cd Root-My-Galaxy-Payloads
-          zip -r build_output.zip build/
-          ls -lh build_output.zip
-          echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build_output.zip" >> $GITHUB_ENV
-
-      # =====【前置上传】先上传Artifact，不要放在git命令后面 =====
-      - name: 上传build目录zip制品
-        uses: actions/upload-artifact@v4
-        with:
-          name: pa3q-S9380ZHU1AYA1-build-zip
-          path: ${{ env.ZIP_FILE }}
-          retention-days: 30
-
-      # ===== 最后执行git提交推送 =====
       - name: 提交推送产物
         run: |
           git config user.name "CI Builder"
