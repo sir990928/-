@@ -38,7 +38,7 @@ jobs:
       - name: 复制 root-umh 到 artifacts
         run: |
           cd Root-My-Galaxy-Payloads
-          SRC_UMH="build/cve-2026-43499"
+          SRC_UMH="build/pa3q-S9380ZHU1AYA1/cve-2026-43499"
           ls -la ${SRC_UMH}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
           mkdir -p ${DST_FOLDER}
@@ -48,7 +48,7 @@ jobs:
 
       - name: 复制 root 守护进程到 APK jniLibs
         run: |
-          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build/cve-2026-43499-root"
+          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build/pa3q-S9380ZHU1AYA1/cve-2026-43499-root"
           ls -la ${ROOT_BIN}
           DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a"
           mkdir -p ${DST_DIR}
