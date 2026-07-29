@@ -9,8 +9,11 @@
 #define APP_PHYS_P0_ORACLE 1
 #else
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-root-umh"
-#define APP_PHYS_P0_ORACLE 1
 #endif
+#ifndef BUILD_FINGERPRINT
+#define BUILD_FINGERPRINT "samsung/pa3qzhx/pa3q:15/AP3A.240905.015/S9380ZHU1AYA1:user/release-keys"
+#endif
+
 
 #define KIMAGE_TEXT_BASE 0xffffffc080000000ULL
 #define P0_PAGE_OFFSET 0xffffff8000000000ULL
