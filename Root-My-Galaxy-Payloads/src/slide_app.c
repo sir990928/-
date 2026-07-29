@@ -674,7 +674,9 @@ static int slide_restore_physical_oracle(void) {
   return gate_restored && probe_restored;
 }
 
-static const int delays[] = {
+int app_trigger_fops_slide_route(void) {
+  static size_t delay_index;
+  static const int delays[] = {
     40000, 40000, 40000, 40000, 40000, 40000,
     40000, 40000, 40000, 40000, 40000, 40000,
 };
