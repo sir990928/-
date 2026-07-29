@@ -648,7 +648,7 @@ static int slide_trigger_physical_slot(size_t slot) {
   char delay_arg[16];
   int delay = (int)slide_enter_delay_usec();
   slide_pselect_nfds = PSELECT_ROUTE_NFDS;
-  slide_syscall_pad = 0;
+  slide_syscall_pad = 1;
   snprintf(delay_arg, sizeof(delay_arg), "%d", delay);
   SYSCHK(setenv("SLIDE_ENTER_DELAY_USEC", delay_arg, 1));
   if (slide_trigger_physical_state()) {
