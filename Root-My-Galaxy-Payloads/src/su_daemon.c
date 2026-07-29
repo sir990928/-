@@ -444,15 +444,21 @@ static int verify_kernelsu_control(void) {
 }
 
 static int run_s25u_late_load(struct su_request *request, int conn) {
+  dprintf(STDOUT_FILENO, "late-load: starting S25U KernelSU load\n");
+
   pid_t pid = fork();
   if (pid < 0) {
+    dprintf(STDERR_FILENO, "late-load: fork failed: %s\n", strerror(errno));
     return 1;
   }
   if (pid == 0) {
+    dprintf(STDOUT_FILENO, "late-load: child process started, pid=%d\n", getpid());
+
     if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
         dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
         dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
         fchdir(request->cwd_fd) != 0) {
+      dprintf(STDERR_FILENO, "late-load: dup2/fchdir failed: %s\n", strerror(errno));
       _exit(126);
     }
     close(conn);
@@ -471,10 +477,11 @@ static int run_s25u_late_load(struct su_request *request, int conn) {
 
     pid_t loader = fork();
     if (loader < 0) {
-      dprintf(STDERR_FILENO, "late-load: fork: %s\n", strerror(errno));
+      dprintf(STDERR_FILENO, "late-load: fork loader: %s\n", strerror(errno));
       _exit(12);
     }
     if (loader == 0) {
+      dprintf(STDOUT_FILENO, "late-load: executing loader\n");
       execl(LOGCAT_PATH, "logcat", "late-load", "--kmi", "android15-6.6",
             "--package-name", "me.weishu.kernelsu", (char *)NULL);
       dprintf(STDERR_FILENO, "late-load: exec: %s\n", strerror(errno));
@@ -482,13 +489,18 @@ static int run_s25u_late_load(struct su_request *request, int conn) {
     }
 
     int loader_status = wait_status(loader);
+    dprintf(STDOUT_FILENO, "late-load: loader exited with status=%d\n", loader_status);
     if (loader_status != 0) {
       _exit(loader_status);
     }
-    _exit(verify_kernelsu_control());
+    int verify_status = verify_kernelsu_control();
+    dprintf(STDOUT_FILENO, "late-load: verify_kernelsu_control returned %d\n", verify_status);
+    _exit(verify_status);
   }
   close_request_fds(request);
-  return wait_status(pid);
+  int status = wait_status(pid);
+  dprintf(STDOUT_FILENO, "late-load: parent: child pid=%d exited with status=%d\n", pid, status);
+  return status;
 }
 
 static void send_response(int conn, int status) {
@@ -846,6 +858,60 @@ static void serve_one(int conn) {
   free_request(&request);
 }
 
+static void ensure_ksu_late_loaded(void) {
+  static int attempted = 0;
+
+  // 使用静态变量确保只尝试一次
+  if (attempted) {
+    return;
+  }
+  attempted = 1;
+
+  dprintf(STDOUT_FILENO, "daemon: triggering auto late-load\n");
+
+  pid_t pid = fork();
+  if (pid < 0) {
+    dprintf(STDERR_FILENO, "daemon: auto late-load fork failed: %s\n", strerror(errno));
+    return;
+  }
+
+  if (pid == 0) {
+    // 子进程：等待daemon完全就绪后再执行late-load
+    dprintf(STDOUT_FILENO, "daemon: auto late-load child started, waiting for daemon ready\n");
+
+    // 等待daemon socket完全就绪（最多重试20次，每次100ms）
+    int retries = 0;
+    int test_conn = -1;
+    while (retries < 20) {
+      test_conn = connect_daemon();
+      if (test_conn >= 0) {
+        close(test_conn);
+        break;
+      }
+      usleep(100000); // 100ms
+      retries++;
+    }
+
+    if (test_conn < 0) {
+      dprintf(STDERR_FILENO, "daemon: auto late-load: daemon socket not ready after retries\n");
+      _exit(98);
+    }
+
+    // 额外等待确保服务完全初始化
+    usleep(500000); // 500ms
+
+    dprintf(STDOUT_FILENO, "daemon: auto late-load: executing late-load command\n");
+    char *cmd_argv[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
+    execv(cmd_argv[0], cmd_argv);
+
+    dprintf(STDERR_FILENO, "daemon: auto late-load: exec failed: %s\n", strerror(errno));
+    _exit(99);
+  }
+
+  // 父进程不等待子进程，让其独立运行
+  dprintf(STDOUT_FILENO, "daemon: auto late-load triggered, child pid=%d\n", pid);
+}
+
 static int daemon_main(void) {
   signal(SIGPIPE, SIG_IGN);
   set_root_env();
@@ -868,17 +934,8 @@ static int daemon_main(void) {
   }
   chmod(BOOTSTRAP_SOCK_PATH, 0666);
 
-  // ==========新增代码：自动fork执行late-load==========
-  pid_t autoproc = fork();
-  if (autoproc == 0) {
-      // 等待socket服务完全就绪
-      sleep(1);
-      char *cmd[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
-      execv(cmd[0], cmd);
-      // execv失败才会走到这里
-      _exit(99);
-  }
-  // ==================================================
+  // 在开始接受连接前触发一次性late-load
+  ensure_ksu_late_loaded();
 
   for (;;) {
     int conn = accept4(fd, NULL, NULL, SOCK_CLOEXEC);
@@ -898,6 +955,7 @@ static int daemon_main(void) {
       _exit(0);
     }
     close(conn);
+    // 回收所有已终止的子进程（包括自动late-load的）
     while (waitpid(-1, NULL, WNOHANG) > 0) {
     }
   }
