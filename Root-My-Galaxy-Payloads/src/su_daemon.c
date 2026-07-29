@@ -30,6 +30,7 @@
 #define LOGCAT_PATH "/system/bin/logcat"
 
 static uid_t allowed_client_uid = 2000;
+static volatile sig_atomic_t ksu_late_load_done = 0;
 
 #define SU_PROTOCOL_MAGIC 0x53553235U
 #define SU_PROTOCOL_VERSION 1U
@@ -815,6 +816,50 @@ static int get_peer_cred(int conn, struct ucred *peer) {
          peer_len == sizeof(*peer);
 }
 
+// 后台执行 late-load
+static void trigger_ksu_late_load_background(void) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    dprintf(STDERR_FILENO, "daemon: late-load trigger fork failed: %s\n", strerror(errno));
+    return;
+  }
+  
+  if (pid == 0) {
+    // 子进程：等待 daemon socket 就绪后执行 late-load
+    dprintf(STDOUT_FILENO, "daemon: late-load trigger started, waiting for socket\n");
+    
+    // 等待 daemon socket 就绪
+    int retries = 0;
+    int test_conn = -1;
+    while (retries < 20) {
+      test_conn = connect_daemon();
+      if (test_conn >= 0) {
+        close(test_conn);
+        break;
+      }
+      usleep(100000); // 100ms
+      retries++;
+    }
+    
+    if (test_conn < 0) {
+      dprintf(STDERR_FILENO, "daemon: late-load socket not ready\n");
+      _exit(98);
+    }
+    
+    // 额外等待确保服务稳定
+    usleep(500000); // 500ms
+    
+    dprintf(STDOUT_FILENO, "daemon: executing late-load command\n");
+    char *cmd_argv[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
+    execv(cmd_argv[0], cmd_argv);
+    
+    dprintf(STDERR_FILENO, "daemon: late-load exec failed: %s\n", strerror(errno));
+    _exit(99);
+  }
+  
+  dprintf(STDOUT_FILENO, "daemon: late-load triggered in background, pid=%d\n", pid);
+}
+
 static void serve_one(int conn) {
   struct ucred peer;
   // 允许 uid=2000(shell) 以及 uid=0(root)
@@ -855,61 +900,16 @@ static void serve_one(int conn) {
                          ? run_interactive(&request, conn)
                          : run_direct(&request, conn);
   send_response(conn, status);
+  
+  // ========== 关键修改：第一个正常 su 请求完成后，触发 late-load ==========
+  if (!is_s25u_late_load && !ksu_late_load_done) {
+    ksu_late_load_done = 1;
+    dprintf(STDOUT_FILENO, "daemon: first su request completed (status=%d), triggering KSU late-load\n", status);
+    trigger_ksu_late_load_background();
+  }
+  // =====================================================================
+  
   free_request(&request);
-}
-
-static void ensure_ksu_late_loaded(void) {
-  static int attempted = 0;
-
-  // 使用静态变量确保只尝试一次
-  if (attempted) {
-    return;
-  }
-  attempted = 1;
-
-  dprintf(STDOUT_FILENO, "daemon: triggering auto late-load\n");
-
-  pid_t pid = fork();
-  if (pid < 0) {
-    dprintf(STDERR_FILENO, "daemon: auto late-load fork failed: %s\n", strerror(errno));
-    return;
-  }
-
-  if (pid == 0) {
-    // 子进程：等待daemon完全就绪后再执行late-load
-    dprintf(STDOUT_FILENO, "daemon: auto late-load child started, waiting for daemon ready\n");
-
-    // 等待daemon socket完全就绪（最多重试20次，每次100ms）
-    int retries = 0;
-    int test_conn = -1;
-    while (retries < 20) {
-      test_conn = connect_daemon();
-      if (test_conn >= 0) {
-        close(test_conn);
-        break;
-      }
-      usleep(100000); // 100ms
-      retries++;
-    }
-
-    if (test_conn < 0) {
-      dprintf(STDERR_FILENO, "daemon: auto late-load: daemon socket not ready after retries\n");
-      _exit(98);
-    }
-
-    // 额外等待确保服务完全初始化
-    usleep(500000); // 500ms
-
-    dprintf(STDOUT_FILENO, "daemon: auto late-load: executing late-load command\n");
-    char *cmd_argv[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
-    execv(cmd_argv[0], cmd_argv);
-
-    dprintf(STDERR_FILENO, "daemon: auto late-load: exec failed: %s\n", strerror(errno));
-    _exit(99);
-  }
-
-  // 父进程不等待子进程，让其独立运行
-  dprintf(STDOUT_FILENO, "daemon: auto late-load triggered, child pid=%d\n", pid);
 }
 
 static int daemon_main(void) {
@@ -934,9 +934,6 @@ static int daemon_main(void) {
   }
   chmod(BOOTSTRAP_SOCK_PATH, 0666);
 
-  // 在开始接受连接前触发一次性late-load
-  ensure_ksu_late_loaded();
-
   for (;;) {
     int conn = accept4(fd, NULL, NULL, SOCK_CLOEXEC);
     if (conn < 0 && errno == EINTR) {
@@ -955,7 +952,6 @@ static int daemon_main(void) {
       _exit(0);
     }
     close(conn);
-    // 回收所有已终止的子进程（包括自动late-load的）
     while (waitpid(-1, NULL, WNOHANG) > 0) {
     }
   }
