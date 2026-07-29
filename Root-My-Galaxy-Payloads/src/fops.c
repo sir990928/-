@@ -247,6 +247,8 @@ int try_cfi_stage(void) {
   cfi_attempts++;
   int fd = open_ashmem_device();
   pr_info("cfi ashmem_path=%s fd=%d\n", ashmem_path, fd);
+  uint64_t test_val = kernel_read64(fd, text_addr(INIT_TASK));
+  pr_info("cfi debug: init_task read test=%016llx errno=%d\n", (unsigned long long)test_val, errno);
   int dirty = 0;
   int can_read_back = 0;
 
