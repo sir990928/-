@@ -3,7 +3,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "Root-My-Galaxy-Payloads-main/**"
+      - "Root-My-Galaxy-Payloads/**"
       - ".github/workflows/build-payload.yml"
   workflow_dispatch:
 
@@ -31,7 +31,7 @@ jobs:
 
       - name: 编译漏洞程序
         run: |
-          cd Root-My-Galaxy-Payloads-main
+          cd Root-My-Galaxy-Payloads
           rm -rf build/
           make TARGET=pa3q-S9380ZHU1AYA1 API=35 all
 
@@ -48,9 +48,9 @@ jobs:
 
       - name: 复制 root 守护进程到 APK jniLibs
         run: |
-          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build/cve-2026-43499-root"
+          ROOT_BIN="$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build/cve-2026-43499-root"
           ls -la ${ROOT_BIN}
-          DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a"
+          DST_DIR="$GITHUB_WORKSPACE/Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a"
           mkdir -p ${DST_DIR}
           cp -v ${ROOT_BIN} ${DST_DIR}/libcve43499root.so
           echo "【root so 哈希】"
@@ -62,7 +62,7 @@ jobs:
           cd Root-My-Galaxy-Payloads-main
           zip -r build_output.zip build/
           ls -lh build_output.zip
-          echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads-main/build_output.zip" >> $GITHUB_ENV
+          echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build_output.zip" >> $GITHUB_ENV
 
       # =====【前置上传】先上传Artifact，不要放在git命令后面 =====
       - name: 上传build目录zip制品
@@ -78,8 +78,8 @@ jobs:
           git config user.name "CI Builder"
           git config user.email "ci@localhost"
           git remote set-url origin https://${{ secrets.Yml }}@github.com/${{ github.repository }}.git
-          git add Root-My-Galaxy-Payloads-main/artifacts/pa3q-S9380ZHU1AYA1/
-          git add Root-My-Galaxy-main/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
+          git add Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/
+          git add Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
           if git diff --cached --quiet; then
             echo "ℹ️ 文件无变更，跳过提交"
           else

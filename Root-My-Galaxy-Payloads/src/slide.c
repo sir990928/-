@@ -82,9 +82,12 @@ static int slide_tracefs_leak_kernel_base(void) {
   static const char event_enable[] =
       SLIDE_TRACEFS_ROOT "/events/sched/sched_blocked_reason/enable";
 
-    slide_tracefs_write(tracing_on, "0");
-    slide_tracefs_write(event_enable, "1");
-    slide_tracefs_write(tracing_on, "1");
+  if (!slide_tracefs_write(tracing_on, "0") ||
+      !slide_tracefs_write(event_enable, "1") ||
+      !slide_tracefs_write(tracing_on, "1")) {
+    pr_error("slide tracefs setup failed errno=%d\n", errno);
+    return 0;
+  }
 
   int trace_fd = open(trace, O_WRONLY | O_TRUNC | O_CLOEXEC);
   if (trace_fd >= 0) {

