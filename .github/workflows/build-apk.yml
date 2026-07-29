@@ -15,7 +15,7 @@ jobs:
     
     defaults:
       run:
-        working-directory: ./Root-My-Galaxy-main
+        working-directory: ./Root-My-Galaxy
 
     steps:
       - name: 检出仓库代码
@@ -50,6 +50,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Root-My-Galaxy-Release-Zip
-          path: Root-My-Galaxy-main/Root-My-Galaxy-Release.zip
+          path: Root-My-Galaxy/Root-My-Galaxy-Release.zip
           retention-days: 7
 
