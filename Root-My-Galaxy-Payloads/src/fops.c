@@ -5,7 +5,9 @@
 #else
 #define PSELECT_CFI_ROUTE_ATTEMPTS 1
 #endif
-
+#ifndef ASHMEM_SET_SIZE
+#define ASHMEM_SET_SIZE _IOW(__ASHMEMIOC, 3, size_t)
+#endif
 atomic_int cfi_stage_done;
 ssize_t cfi_write_ret = -1;
 ssize_t cfi_read_ret = -1;
