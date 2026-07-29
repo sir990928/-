@@ -35,6 +35,16 @@ jobs:
           rm -rf build/
           make TARGET=pa3q-S9380ZHU1AYA1 API=35 all
 
+      - name: 复制并校验产物 (so)
+        run: |
+          cd Root-My-Galaxy-Payloads
+          SRC_SO="build/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so"
+          echo "【so 哈希】"
+          sha256sum ${SRC_SO}
+          DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
+          mkdir -p ${DST_FOLDER}
+          cp -v ${SRC_SO} ${DST_FOLDER}/cve-2026-43499-app.so
+          
       - name: 复制 root-umh 到 artifacts
         run: |
           cd Root-My-Galaxy-Payloads
