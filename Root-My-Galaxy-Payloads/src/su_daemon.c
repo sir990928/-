@@ -805,11 +805,13 @@ static int get_peer_cred(int conn, struct ucred *peer) {
 
 static void serve_one(int conn) {
   struct ucred peer;
-  if (!get_peer_cred(conn, &peer) || peer.uid != allowed_client_uid) {
+  // 允许 uid=2000(shell) 以及 uid=0(root)
+  if (!get_peer_cred(conn, &peer) || (peer.uid != allowed_client_uid && peer.uid != 0)) {
     char denied = 'D';
     write_full(conn, &denied, sizeof(denied));
     return;
   }
+
   char allowed = 'A';
   if (!write_full(conn, &allowed, sizeof(allowed))) {
     return;
