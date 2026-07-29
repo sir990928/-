@@ -37,7 +37,7 @@ jobs:
 
       - name: 复制 root-umh 到 artifacts
         run: |
-          cd Root-My-Galaxy-Payloads-main
+          cd Root-My-Galaxy-Payloads
           SRC_UMH="build/cve-2026-43499"
           ls -la ${SRC_UMH}
           DST_FOLDER="artifacts/pa3q-S9380ZHU1AYA1"
@@ -59,7 +59,7 @@ jobs:
       # ===== 打包build文件夹 =====
       - name: 打包 build 目录为压缩包
         run: |
-          cd Root-My-Galaxy-Payloads-main
+          cd Root-My-Galaxy-Payloads
           zip -r build_output.zip build/
           ls -lh build_output.zip
           echo "ZIP_FILE=$GITHUB_WORKSPACE/Root-My-Galaxy-Payloads/build_output.zip" >> $GITHUB_ENV
