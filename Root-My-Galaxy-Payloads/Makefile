@@ -1,7 +1,7 @@
 API ?= 35
 OUTDIR ?= build
 
-TARGET_HEADER := src/targets/pa3q-S938NKSUACZF1/target.h
+TARGET_HEADER := src/targets/pa3q-S9380ZHU1AYA1/target.h
 TARGET_CC := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$(API)-clang
 
 ifeq ($(wildcard $(TARGET_CC)),)
