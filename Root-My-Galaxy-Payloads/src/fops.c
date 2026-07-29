@@ -273,18 +273,9 @@ int try_cfi_stage(void) {
   pr_info("cfi skip restore_p0_oracle_pages in app mode\n");
 #endif
 
-  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
-  pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
-          misc_fops, (unsigned long long)original_fops);
-  ssize_t restore = configfs_write_once(
-      fd, misc_fops, &original_fops, sizeof(original_fops));
-  cfi_restore_ret = restore;
-  if (restore != (ssize_t)sizeof(original_fops)) {
-    cfi_last_step = 5;
-    cfi_last_errno = errno;
-    goto fail;
-  }
-
+  // APP 模式下跳过 FOPS 恢复，直接进入 pipe physrw
+pr_info("cfi skip fops restore (app mode), proceed to pipe physrw\n");
+cfi_restore_ret = sizeof(uint64_t);
   // APP 模式下跳过 fops 恢复读取验证
   pr_info("cfi skip fops restore read verify\n");
 
