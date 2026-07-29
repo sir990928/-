@@ -256,6 +256,10 @@ uintptr_t prepare_pipe_buffer_page(void) {
   SYSCHK(pipe(result_pipe));
   pid_t child = SYSCHK(fork());
   if (child == 0) {
+    SYSCHK(prctl(PR_SET_PDEATHSIG, SIGKILL));
+    if (getppid() == 1) {
+      _exit(1);
+    }
     SYSCHK(close(result_pipe[0]));
     uintptr_t base = prepare_pipe_buffer_page_child();
     SYSCHK(write(result_pipe[1], &base, sizeof(base)));
@@ -598,12 +602,6 @@ int pipe_phys_write_data(
 
 uint64_t pipe_read64(int fd, uintptr_t direct_addr) {
   uint64_t value = 0;
-  pipe_phys_read_data(fd, direct_addr, &value, sizeof(value));
-  return value;
-}
-
-uint32_t pipe_read32(int fd, uintptr_t direct_addr) {
-  uint32_t value = 0;
   pipe_phys_read_data(fd, direct_addr, &value, sizeof(value));
   return value;
 }
