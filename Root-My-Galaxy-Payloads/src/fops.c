@@ -246,6 +246,7 @@ int install_child_root(int fd) {
 int try_cfi_stage(void) {
   cfi_attempts++;
   int fd = open_ashmem_device();
+  pr_info("cfi ashmem_path=%s fd=%d\n", ashmem_path, fd);
   int dirty = 0;
   int can_read_back = 0;
 
