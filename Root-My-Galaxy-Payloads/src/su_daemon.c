@@ -26,11 +26,12 @@
 #define BOOTSTRAP_SOCK_PATH "/data/local/tmp/temp_su.sock"
 #define HOLD_READY_SOCKET "cve43499_roothold"
 #define SH_PATH "/system/bin/sh"
-#define S25U_KSUD_PATH "/data/local/tmp/ksud-samsung-android15-6.6-kdp"
+#define S25U_KSUD_PATH "/data/local/tmp/.ksud-stage"
+#define S938B_KO_PATH "/data/local/tmp/android15-6.6_kernelsu-s938b-cze1-kdp.ko"
 #define LOGCAT_PATH "/system/bin/logcat"
+#define S938B_KO_FD_PATH "/proc/self/fd/0"
 
 static uid_t allowed_client_uid = 2000;
-static volatile sig_atomic_t ksu_late_load_done = 0;
 
 #define SU_PROTOCOL_MAGIC 0x53553235U
 #define SU_PROTOCOL_VERSION 1U
@@ -445,21 +446,15 @@ static int verify_kernelsu_control(void) {
 }
 
 static int run_s25u_late_load(struct su_request *request, int conn) {
-  dprintf(STDOUT_FILENO, "late-load: starting S25U KernelSU load\n");
-
   pid_t pid = fork();
   if (pid < 0) {
-    dprintf(STDERR_FILENO, "late-load: fork failed: %s\n", strerror(errno));
     return 1;
   }
   if (pid == 0) {
-    dprintf(STDOUT_FILENO, "late-load: child process started, pid=%d\n", getpid());
-
     if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
         dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
         dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
         fchdir(request->cwd_fd) != 0) {
-      dprintf(STDERR_FILENO, "late-load: dup2/fchdir failed: %s\n", strerror(errno));
       _exit(126);
     }
     close(conn);
@@ -478,11 +473,10 @@ static int run_s25u_late_load(struct su_request *request, int conn) {
 
     pid_t loader = fork();
     if (loader < 0) {
-      dprintf(STDERR_FILENO, "late-load: fork loader: %s\n", strerror(errno));
+      dprintf(STDERR_FILENO, "late-load: fork: %s\n", strerror(errno));
       _exit(12);
     }
     if (loader == 0) {
-      dprintf(STDOUT_FILENO, "late-load: executing loader\n");
       execl(LOGCAT_PATH, "logcat", "late-load", "--kmi", "android15-6.6",
             "--package-name", "me.weishu.kernelsu", (char *)NULL);
       dprintf(STDERR_FILENO, "late-load: exec: %s\n", strerror(errno));
@@ -490,18 +484,59 @@ static int run_s25u_late_load(struct su_request *request, int conn) {
     }
 
     int loader_status = wait_status(loader);
-    dprintf(STDOUT_FILENO, "late-load: loader exited with status=%d\n", loader_status);
     if (loader_status != 0) {
       _exit(loader_status);
     }
-    int verify_status = verify_kernelsu_control();
-    dprintf(STDOUT_FILENO, "late-load: verify_kernelsu_control returned %d\n", verify_status);
-    _exit(verify_status);
+    _exit(verify_kernelsu_control());
   }
   close_request_fds(request);
-  int status = wait_status(pid);
-  dprintf(STDOUT_FILENO, "late-load: parent: child pid=%d exited with status=%d\n", pid, status);
-  return status;
+  return wait_status(pid);
+}
+
+static int run_s938b_insmod(struct su_request *request, int conn) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    return 1;
+  }
+  if (pid == 0) {
+    if (dup2(request->stdin_fd, STDIN_FILENO) < 0 ||
+        dup2(request->stdout_fd, STDOUT_FILENO) < 0 ||
+        dup2(request->stderr_fd, STDERR_FILENO) < 0 ||
+        fchdir(request->cwd_fd) != 0) {
+      _exit(126);
+    }
+    close(conn);
+    close_request_fds(request);
+    if (unshare(CLONE_NEWNS) != 0 ||
+        mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) {
+      dprintf(STDERR_FILENO, "insmod: private mount namespace: %s\n",
+              strerror(errno));
+      _exit(10);
+    }
+    if (mount(S25U_KSUD_PATH, LOGCAT_PATH, NULL, MS_BIND, NULL) != 0) {
+      dprintf(STDERR_FILENO, "insmod: bind mount: %s\n", strerror(errno));
+      _exit(11);
+    }
+    pid_t loader = fork();
+    if (loader < 0) {
+      dprintf(STDERR_FILENO, "insmod: fork: %s\n", strerror(errno));
+      _exit(12);
+    }
+    if (loader == 0) {
+      execl(LOGCAT_PATH, "logcat", "insmod", S938B_KO_FD_PATH, "allow_shell=1",
+            (char *)NULL);
+      dprintf(STDERR_FILENO, "insmod: exec: %s\n", strerror(errno));
+      _exit(127);
+    }
+
+    int loader_status = wait_status(loader);
+    if (loader_status != 0) {
+      _exit(loader_status);
+    }
+    _exit(verify_kernelsu_control());
+  }
+  close_request_fds(request);
+  return wait_status(pid);
 }
 
 static void send_response(int conn, int status) {
@@ -816,59 +851,13 @@ static int get_peer_cred(int conn, struct ucred *peer) {
          peer_len == sizeof(*peer);
 }
 
-// 后台执行 late-load
-static void trigger_ksu_late_load_background(void) {
-  pid_t pid = fork();
-  if (pid < 0) {
-    dprintf(STDERR_FILENO, "daemon: late-load trigger fork failed: %s\n", strerror(errno));
-    return;
-  }
-  
-  if (pid == 0) {
-    // 子进程：等待 daemon socket 就绪后执行 late-load
-    dprintf(STDOUT_FILENO, "daemon: late-load trigger started, waiting for socket\n");
-    
-    // 等待 daemon socket 就绪
-    int retries = 0;
-    int test_conn = -1;
-    while (retries < 20) {
-      test_conn = connect_daemon();
-      if (test_conn >= 0) {
-        close(test_conn);
-        break;
-      }
-      usleep(100000); // 100ms
-      retries++;
-    }
-    
-    if (test_conn < 0) {
-      dprintf(STDERR_FILENO, "daemon: late-load socket not ready\n");
-      _exit(98);
-    }
-    
-    // 额外等待确保服务稳定
-    usleep(500000); // 500ms
-    
-    dprintf(STDOUT_FILENO, "daemon: executing late-load command\n");
-    char *cmd_argv[] = {"/data/local/tmp/cve-2026-43499-root", "--late-load", NULL};
-    execv(cmd_argv[0], cmd_argv);
-    
-    dprintf(STDERR_FILENO, "daemon: late-load exec failed: %s\n", strerror(errno));
-    _exit(99);
-  }
-  
-  dprintf(STDOUT_FILENO, "daemon: late-load triggered in background, pid=%d\n", pid);
-}
-
 static void serve_one(int conn) {
   struct ucred peer;
-  // 允许 uid=2000(shell) 以及 uid=0(root)
-  if (!get_peer_cred(conn, &peer) || (peer.uid != allowed_client_uid && peer.uid != 0)) {
+  if (!get_peer_cred(conn, &peer) || peer.uid != allowed_client_uid) {
     char denied = 'D';
     write_full(conn, &denied, sizeof(denied));
     return;
   }
-
   char allowed = 'A';
   if (!write_full(conn, &allowed, sizeof(allowed))) {
     return;
@@ -894,21 +883,16 @@ static void serve_one(int conn) {
 
   int is_s25u_late_load = request.header.argc == 2 &&
                            strcmp(request.argv[1], "--late-load") == 0;
-  int status = is_s25u_late_load
+  int is_s938b_insmod = request.header.argc == 2 &&
+                        strcmp(request.argv[1], "--insmod") == 0;
+  int status = is_s938b_insmod
+                   ? run_s938b_insmod(&request, conn)
+                   : is_s25u_late_load
                    ? run_s25u_late_load(&request, conn)
                    : request.header.interactive
                          ? run_interactive(&request, conn)
                          : run_direct(&request, conn);
   send_response(conn, status);
-  
-  // ========== 关键修改：第一个正常 su 请求完成后，触发 late-load ==========
-  if (!is_s25u_late_load && !ksu_late_load_done) {
-    ksu_late_load_done = 1;
-    dprintf(STDOUT_FILENO, "daemon: first su request completed (status=%d), triggering KSU late-load\n", status);
-    trigger_ksu_late_load_background();
-  }
-  // =====================================================================
-  
   free_request(&request);
 }
 
@@ -956,7 +940,6 @@ static int daemon_main(void) {
     }
   }
 }
-
 
 static int umh_main(int argc, char **argv) {
   if (geteuid() != 0) {
