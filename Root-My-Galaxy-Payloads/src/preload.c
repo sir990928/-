@@ -60,7 +60,7 @@ static int env_int(const char *name, int fallback, int min, int max) {
 static int attempt_delay_usec(int base_delay, int attempt) {
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
   static const int offsets[] = {
-    5000, 0, 10000, 30000, -5000, 20000, 15000, 25000,
+    0, 5000,
   };
 #else
   static const int offsets[] = {

