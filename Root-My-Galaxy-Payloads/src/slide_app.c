@@ -676,10 +676,16 @@ static int slide_restore_physical_oracle(void) {
 }
 
 int app_trigger_fops_slide_route(void) {
+  static size_t delay_index;
+  static const int delays[] = {
+    20000, 30000, 40000, 50000, 10000, 60000,
+    65000, 70000, 80000, 90000, 55000, 75000,
+  };
   if (!select_slide_payload_index(0)) {
     return 0;
   }
-  int delay = (int)slide_enter_delay_usec();
+  int delay = delays[delay_index % (sizeof(delays) / sizeof(delays[0]))];
+  delay_index++;
   char delay_arg[16];
   snprintf(delay_arg, sizeof(delay_arg), "%d", delay);
   SYSCHK(setenv("SLIDE_ENTER_DELAY_USEC", delay_arg, 1));

