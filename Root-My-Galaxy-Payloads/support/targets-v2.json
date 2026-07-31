@@ -15,7 +15,7 @@
       "abi": "arm64-v8a",
       "pageSize": 4096,
       "exploit": {
-        "url": "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so",
+        "url": "https://raw.githubusercontent.com/sir990928/-/99f612d/Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so",
         "size": 124624
       },
       "kernelsu": {
