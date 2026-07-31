@@ -177,6 +177,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         if (profile.profileId == "pa3q-S9380ZHU1AYA1") {
             processBuilder.environment()["EXPLOIT_ATTEMPTS"] = "24"
             processBuilder.environment()["PSELECT_DELAY_USEC"] = "20000"
+            processBuilder.environment()["APP_USE_ORIGINAL_PSELECT"] = "1"
         }
         cachedP0Offset(bootToken)?.let { processBuilder.environment()[P0_OFFSET_ENV] = it }
         val process = processBuilder.start()
