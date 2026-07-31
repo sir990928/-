@@ -16,7 +16,7 @@
       "pageSize": 4096,
       "exploit": {
         "url": "https://cdn.jsdelivr.net/gh/sir990928/-@main/Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so",
-        "size": 125960
+        "size": 124592
       },
       "kernelsu": {
         "url": "https://cdn.jsdelivr.net/gh/sir990928/-@main/Root-My-Galaxy-Payloads/kernelsu/ksud-s25u-kdp",
