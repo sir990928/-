@@ -17,8 +17,9 @@ data class VerifiedPayloads(
 
 class PayloadRepository(private val context: Context) {
 
-    // 只保留Gitee单一源，移除Github
+    // Pin the manifest commit so raw CDN cache cannot serve an older payload URL.
     private val manifestUrlList = listOf(
+        "https://raw.githubusercontent.com/sir990928/-/76c47a1/Root-My-Galaxy-Payloads/support/targets-v2.json",
         "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/support/targets-v2.json"
     )
 
