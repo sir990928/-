@@ -1,0 +1,23 @@
+# Build output
+build/
+out/
+dist/
+*.o
+*.so
+*.a
+*.apk
+*.apks
+*.zip
+
+# Device and firmware artifacts
+*.img
+*.lz4
+*.tar
+*.tar.md5
+*.log
+tombstones/
+
+# Local/private target data
+private/
+targets/**/target-profile.h
+targets/**/offsets.h
