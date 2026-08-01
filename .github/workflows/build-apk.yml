@@ -51,63 +51,22 @@ jobs:
           make -C Root-My-Galaxy-Payloads \
             TARGET="${TARGET}" API=35 VARIANT=app clean all
           ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
-          sha256sum \
-            "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so" \
-            "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root"
 
-      - name: 整理产物目录
+      - name: 更新仓库文件
         shell: bash
         run: |
-          payload="Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so"
-          payload_dst="Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so"
-          helper="Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root"
-          helper_dst="Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so"
-          mkdir -p "$(dirname "$payload_dst")" "$(dirname "$helper_dst")"
-          cp -f "$payload" "$payload_dst"
-          cp -f "$helper" "$helper_dst"
-
-      - name: 上传SO产物（先行测试）
-        uses: actions/upload-artifact@v4
-        with:
-          name: Root-My-Galaxy-${{ env.TARGET }}-so-only
-          retention-days: 30
-          if-no-files-found: error
-          path: |
-            Root-My-Galaxy-Payloads/artifacts/${{ env.TARGET }}/cve-2026-43499-app.so
-            Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
-
-      - name: 更新载荷清单
-        shell: bash
-        run: |
-          payload_dst="Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so"
-          payload_size="$(stat -c '%s' "$payload_dst")"
+          mkdir -p Root-My-Galaxy-Payloads/artifacts/${TARGET}/
+          mkdir -p Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/
+          cp "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so" \
+             "Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so"
+          cp "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root" \
+             "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so"
+          payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so")"
           tmp_manifest="$(mktemp)"
           jq --arg profile "$TARGET" --argjson size "$payload_size" \
             '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
             Root-My-Galaxy-Payloads/support/targets-v2.json > "$tmp_manifest"
           mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
-
-      - name: 编译正式发布版APK
-        working-directory: Root-My-Galaxy
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
-
-      - name: 上传APK产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: Root-My-Galaxy-${{ env.TARGET }}
-          retention-days: 30
-          if-no-files-found: error
-          path: |
-            Root-My-Galaxy/app/build/outputs/apk/release/*.apk
-            Root-My-Galaxy-Payloads/artifacts/${{ env.TARGET }}/cve-2026-43499-app.so
-            Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
-            Root-My-Galaxy-Payloads/support/targets-v2.json
-
-      - name: 提交更新后的载荷文件
-        shell: bash
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f \
@@ -115,9 +74,31 @@ jobs:
             "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
             Root-My-Galaxy-Payloads/support/targets-v2.json
           if git diff --cached --quiet; then
-            echo "载荷文件无改动，跳过提交"
+            echo "文件无改动，跳过提交"
           else
             git commit -m "ci: 更新 ${TARGET} 运行时文件 [skip ci]"
             git pull --rebase origin main
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
+
+      - name: 编译正式发布版APK
+        working-directory: Root-My-Galaxy
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: 打包产物
+        shell: bash
+        run: |
+          mkdir -p out
+          cp -r "Root-My-Galaxy-Payloads/build/${TARGET}" out/so-build
+          cp Root-My-Galaxy/app/build/outputs/apk/release/*.apk out/ 2>/dev/null || true
+          sha256sum out/so-build/* out/*.apk 2>/dev/null || true
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Root-My-Galaxy-${{ env.TARGET }}
+          retention-days: 30
+          if-no-files-found: error
+          path: out/**
