@@ -1,5 +1,9 @@
 #include "common.h"
 
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+int app_trigger_fops_slide_route(void);
+#endif
+
 uint32_t f_wait;
 uint32_t f_pi_target;
 uint32_t f_pi_chain;
