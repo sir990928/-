@@ -118,5 +118,6 @@ jobs:
             echo "载荷文件无改动，跳过提交"
           else
             git commit -m "ci: 更新 ${TARGET} 运行时文件 [skip ci]"
+            git pull --rebase origin main
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
