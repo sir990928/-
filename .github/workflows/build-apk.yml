@@ -96,7 +96,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
+          git add -f \
             "Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so" \
             "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
             Root-My-Galaxy-Payloads/support/targets-v2.json
