@@ -65,13 +65,27 @@ jobs:
           mkdir -p "$(dirname "$payload_dst")" "$(dirname "$helper_dst")"
           cp -f "$payload" "$payload_dst"
           cp -f "$helper" "$helper_dst"
+
+      - name: 上传SO产物（先行测试）
+        uses: actions/upload-artifact@v4
+        with:
+          name: Root-My-Galaxy-${{ env.TARGET }}-so-only
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            Root-My-Galaxy-Payloads/artifacts/${{ env.TARGET }}/cve-2026-43499-app.so
+            Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
+
+      - name: 更新载荷清单
+        shell: bash
+        run: |
+          payload_dst="Root-My-Galaxy-Payloads/artifacts/${TARGET}/cve-2026-43499-app.so"
           payload_size="$(stat -c '%s' "$payload_dst")"
           tmp_manifest="$(mktemp)"
           jq --arg profile "$TARGET" --argjson size "$payload_size" \
             '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
             Root-My-Galaxy-Payloads/support/targets-v2.json > "$tmp_manifest"
           mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
-          git diff --stat
 
       - name: 编译正式发布版APK
         working-directory: Root-My-Galaxy
@@ -79,7 +93,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: 上传APK与运行库产物
+      - name: 上传APK产物
         uses: actions/upload-artifact@v4
         with:
           name: Root-My-Galaxy-${{ env.TARGET }}
