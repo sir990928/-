@@ -1,84 +1,80 @@
 API ?= 35
-TARGET ?= pa3q-S938NKSUACZF1
-OUTDIR ?= build/$(TARGET)
+TARGET ?= pa3q-S9380ZHU1AYA1
 
-TARGET_HEADER := src/targets/$(TARGET)/target.h
-TARGET_INCLUDE := targets/$(TARGET)/target.h
-TARGET_CC := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$(API)-clang
-
-ifeq ($(wildcard $(TARGET_CC)),)
-$(error set ANDROID_NDK_HOME to an Android NDK containing $(TARGET_CC))
+# 设置CLANG编译器，优先使用环境变量，否则使用TARGET_CC
+ifndef CLANG
+    CLANG := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$(API)-clang
 endif
 
-PRELOAD := $(OUTDIR)/cve-2026-43499
-APP_PRELOAD := $(OUTDIR)/cve-2026-43499-app.so
-APP_RELEASE := $(OUTDIR)/cve-2026-43499-app.release.so
-APP_RELEASE_SIZE := 104128
-ROOT_HELPER := $(OUTDIR)/cve-2026-43499-root
+ROOT := .
+SRC_ORIGINAL := $(ROOT)/src/original
+SRC_DEVICE := $(ROOT)/src/device
+TARGET_DIR := $(ROOT)/target/$(TARGET)
+INCLUDE_DIR := $(ROOT)/include
+TARGET_INCLUDE := $(INCLUDE_DIR)/targets/$(TARGET)/target.h
+BUILD_DIR := $(ROOT)/build/v6
+OBJ_DIR := $(BUILD_DIR)/obj
+OUT_DIR := $(BUILD_DIR)/artifact
 
-PRELOAD_SRCS := \
-  src/main.c \
-  src/util.c \
-  src/slide.c \
-  src/fops.c \
-  src/pipe.c \
-  src/root.c \
-  src/preload.c
+TARGET_FLAGS := --target=aarch64-linux-android$(API)
+COMMON_CFLAGS := $(TARGET_FLAGS) -O2 -g0 -Wall -Wextra -Wno-unused-parameter
+ORIGINAL_CPPFLAGS := -I$(SRC_ORIGINAL) -I$(INCLUDE_DIR) -I$(TARGET_DIR) -DTARGET_CONFIG_H=\"target.h\"
+DEVICE_CPPFLAGS := -I$(SRC_DEVICE) -I$(INCLUDE_DIR) -I$(TARGET_DIR)
 
-APP_PRELOAD_SRCS := \
-  src/main.c \
-  src/util.c \
-  src/slide_app.c \
-  src/fops.c \
-  src/pipe.c \
-  src/root.c \
-  src/preload.c
+ORIGINAL_OBJECTS := \
+	$(OBJ_DIR)/main.o \
+	$(OBJ_DIR)/util.o \
+	$(OBJ_DIR)/fops.o \
+	$(OBJ_DIR)/pipe.o \
+	$(OBJ_DIR)/preload_minimal.o \
+	$(OBJ_DIR)/root_compat_globals.o
 
-COMMON_CFLAGS := \
-  -O2 -g0 -Wall -Wextra \
-  -Wno-unused-parameter -Wno-sign-compare \
-  -Isrc -DTARGET_HEADER='"$(TARGET_INCLUDE)"'
+DEVICE_OBJECTS := \
+	$(OBJ_DIR)/root-umh.o \
+	$(OBJ_DIR)/slide-tracefs.o
 
-.DEFAULT_GOAL := all
+PAYLOAD := $(OUT_DIR)/cve-2026-43499-root-original-zhu-tracefs-v6.so
+HELPER := $(OUT_DIR)/cve-2026-43499-root
 
-.PHONY: all clean info release
+.PHONY: all clean hashes debug
 
-all: $(PRELOAD) $(APP_PRELOAD) $(ROOT_HELPER)
+all: $(PAYLOAD) $(HELPER)
 
-release: $(APP_RELEASE)
+# 调试目标，显示变量值
+debug:
+	@echo "API = $(API)"
+	@echo "TARGET = $(TARGET)"
+	@echo "ANDROID_NDK_HOME = $(ANDROID_NDK_HOME)"
+	@echo "CLANG = $(CLANG)"
+	@echo "TARGET_FLAGS = $(TARGET_FLAGS)"
 
-$(OUTDIR):
+$(TARGET_INCLUDE): $(TARGET_DIR)/target.h
+	mkdir -p $(@D)
+	cp $< $@
+
+$(OBJ_DIR) $(OUT_DIR):
 	mkdir -p $@
 
-$(PRELOAD): $(PRELOAD_SRCS) $(TARGET_HEADER) src/offset.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
-	$(TARGET_CC) -fPIC $(COMMON_CFLAGS) $(PRELOAD_SRCS) \
-	  -shared -pthread -o $@
+$(OBJ_DIR)/%.o: $(SRC_ORIGINAL)/%.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
-$(ROOT_HELPER): src/su_daemon.c | $(OUTDIR)
-	$(TARGET_CC) -fPIE -pie -O2 -g0 -Wall -Wextra $< -ldl -o $@
+$(OBJ_DIR)/root-umh.o: $(SRC_DEVICE)/root.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) -fPIC $(DEVICE_CPPFLAGS) -c $< -o $@
 
-$(APP_PRELOAD): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) src/offset.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
-	$(TARGET_CC) -DAPP_PAYLOAD=1 -fPIC $(COMMON_CFLAGS) $(APP_PRELOAD_SRCS) \
-	  -shared -pthread -o $@
+$(OBJ_DIR)/slide-tracefs.o: $(SRC_DEVICE)/slide.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) -fPIC $(DEVICE_CPPFLAGS) -c $< -o $@
 
-$(APP_RELEASE): $(APP_PRELOAD_SRCS) $(TARGET_HEADER) src/offset.h src/common.h src/kernelsnitch/*.h | $(OUTDIR)
-	$(TARGET_CC) -DAPP_PAYLOAD=1 -fPIC -Oz -g0 \
-	  -fno-unwind-tables -fno-asynchronous-unwind-tables \
-	  -ffunction-sections -fdata-sections \
-	  -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare \
-	  -Isrc -DTARGET_HEADER='"$(TARGET_INCLUDE)"' \
-	  $(APP_PRELOAD_SRCS) -shared -pthread \
-	  -Wl,--gc-sections -Wl,--icf=all -s -o $@
-	@test $$(stat -c %s $@) -le $(APP_RELEASE_SIZE)
-	truncate -s $(APP_RELEASE_SIZE) $@
+$(PAYLOAD): $(ORIGINAL_OBJECTS) $(DEVICE_OBJECTS) | $(OUT_DIR)
+	$(CLANG) $(TARGET_FLAGS) -shared -fuse-ld=lld \
+		-Wl,--no-undefined -Wl,-z,relro -Wl,-z,now \
+		$(ORIGINAL_OBJECTS) $(DEVICE_OBJECTS) -pthread -ldl -o $@
 
-info:
-	@echo "TARGET=$(TARGET)"
-	@echo "TARGET_CC=$(TARGET_CC)"
-	@echo "PRELOAD=$(PRELOAD)"
-	@echo "APP_PRELOAD=$(APP_PRELOAD)"
-	@echo "APP_RELEASE=$(APP_RELEASE)"
-	@echo "ROOT_HELPER=$(ROOT_HELPER)"
+$(HELPER): $(ROOT)/helper/su_daemon.c | $(OUT_DIR)
+	$(CLANG) $(TARGET_FLAGS) -fPIE -pie -O2 -g0 -Wall -Wextra \
+		$< -ldl -o $@
+
+hashes: all
+	sha256sum $(PAYLOAD) $(HELPER) $(TARGET_DIR)/target.h
 
 clean:
-	rm -rf $(OUTDIR)
+	rm -rf $(BUILD_DIR)

