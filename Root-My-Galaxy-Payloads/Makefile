@@ -17,7 +17,7 @@ OUT_DIR := $(BUILD_DIR)
 
 TARGET_FLAGS := --target=aarch64-linux-android$(API)
 COMMON_CFLAGS := $(TARGET_FLAGS) -O2 -g0 -Wall -Wextra -Wno-unused-parameter
-ALL_CPPFLAGS := -I$(SRC_ORIGINAL) -I$(SRC_DEVICE) -I$(INCLUDE_DIR) -I$(TARGET_DIR) -DTARGET_CONFIG_H=\"target.h\"
+ALL_CPPFLAGS := -I$(SRC_DEVICE) -I$(SRC_ORIGINAL) -I$(INCLUDE_DIR) -I$(TARGET_DIR) -DTARGET_CONFIG_H=\"target.h\"
 
 VARIANT ?= adb
 
