@@ -50,8 +50,6 @@ jobs:
         run: |
           make -C Root-My-Galaxy-Payloads \
             TARGET="${TARGET}" API=35 VARIANT=app clean all
-          cp "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root-app.so" \
-             "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so"
           ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
           sha256sum \
             "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so" \
