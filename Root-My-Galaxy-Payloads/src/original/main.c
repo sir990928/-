@@ -190,7 +190,7 @@ int run_exploit(int argc, char **argv) {
     return 0;
   }
 
-  #if defined(APP_PAYLOAD) && APP_PAYLOAD
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
   {
     pid_t fops_pid = SYSCHK(fork());
     if (fops_pid == 0) {
