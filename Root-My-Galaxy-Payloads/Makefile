@@ -24,8 +24,12 @@ VARIANT ?= adb
 
 ifeq ($(VARIANT),app)
     VARIANT_CFLAGS := -DAPP_PAYLOAD=1
+    PRELOAD_SRC := $(SRC_ORIGINAL)/preload.c
+    SLIDE_SRC := $(SRC_ORIGINAL)/slide_app.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499-app.so
 else
+    PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
+    SLIDE_SRC := $(SRC_DEVICE)/slide.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499
 endif
 
@@ -34,9 +38,9 @@ OBJECTS := \
 	$(OBJ_DIR)/util.o \
 	$(OBJ_DIR)/fops.o \
 	$(OBJ_DIR)/pipe.o \
-	$(OBJ_DIR)/preload_minimal.o \
 	$(OBJ_DIR)/root_compat_globals.o \
 	$(OBJ_DIR)/root-umh.o \
+	$(OBJ_DIR)/preload.o \
 	$(OBJ_DIR)/slide.o
 
 HELPER := $(OUT_DIR)/cve-2026-43499-root
@@ -64,16 +68,16 @@ $(OBJ_DIR)/fops.o: $(SRC_ORIGINAL)/fops.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 $(OBJ_DIR)/pipe.o: $(SRC_ORIGINAL)/pipe.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/preload_minimal.o: $(SRC_ORIGINAL)/preload_minimal.c $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
-
 $(OBJ_DIR)/root_compat_globals.o: $(SRC_ORIGINAL)/root_compat_globals.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/root-umh.o: $(SRC_DEVICE)/root.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(DEVICE_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/slide.o: $(SRC_DEVICE)/slide.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+$(OBJ_DIR)/preload.o: $(PRELOAD_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/slide.o: $(SLIDE_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
 $(PAYLOAD): $(OBJECTS) | $(OUT_DIR)
