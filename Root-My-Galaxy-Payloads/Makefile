@@ -25,11 +25,15 @@ ifeq ($(VARIANT),app)
     VARIANT_CFLAGS := -DAPP_PAYLOAD=1
     PRELOAD_SRC := $(SRC_ORIGINAL)/preload.c
     SLIDE_SRC := $(SRC_ORIGINAL)/slide_app.c
+    PIPE_SRC := $(SRC_DEVICE)/pipe.c
+    UTIL_SRC := $(SRC_DEVICE)/util.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499-app.so
 else
     VARIANT_CFLAGS := -DAPP_PAYLOAD=0
     PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
     SLIDE_SRC := $(SRC_DEVICE)/slide.c
+    PIPE_SRC := $(SRC_ORIGINAL)/pipe.c
+    UTIL_SRC := $(SRC_ORIGINAL)/util.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499
 endif
 
@@ -65,13 +69,13 @@ $(OBJ_DIR) $(OUT_DIR):
 $(OBJ_DIR)/main.o: $(SRC_ORIGINAL)/main.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ALL_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/util.o: $(SRC_ORIGINAL)/util.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+$(OBJ_DIR)/util.o: $(UTIL_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ALL_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/fops.o: $(SRC_ORIGINAL)/fops.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ALL_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/pipe.o: $(SRC_ORIGINAL)/pipe.c $(TARGET_INCLUDE) | $(OBJ_DIR)
+$(OBJ_DIR)/pipe.o: $(PIPE_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ALL_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/root_compat_globals.o: $(SRC_ORIGINAL)/root_compat_globals.c $(TARGET_INCLUDE) | $(OBJ_DIR)
