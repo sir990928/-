@@ -48,7 +48,6 @@ jobs:
       - name: 编译漏洞载荷与守护进程
         shell: bash
         run: |
-          test -x "Root-My-Galaxy-Payloads/kernelsu/ksud-s25u-kdp"
           make -C Root-My-Galaxy-Payloads \
             TARGET="${TARGET}" API=35 VARIANT=app clean all
           ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
