@@ -166,6 +166,7 @@ void do_pselect_fake_lock_route(void) {
     struct timespec *timeoutp = &timeout;
 
     errno = 0;
+    pr_info("pselect about to call nfds=%d lock=%016zx w0=%016zx fops=%016zx page=%016zx\n", PSELECT_ROUTE_NFDS, fake_lock, fake_w0, fake_fops, page_base);
     int ret = pselect(PSELECT_ROUTE_NFDS, &in, &out, &ex, timeoutp, NULL);
     int saved_errno = errno;
     atomic_store(&punch_consume_go, 0);
