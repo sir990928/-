@@ -24,10 +24,11 @@ VARIANT ?= adb
 
 ifeq ($(VARIANT),app)
     VARIANT_CFLAGS := -DAPP_PAYLOAD=1
-    PRELOAD_SRC := $(SRC_ORIGINAL)/preload.c
-    SLIDE_SRC := $(SRC_ORIGINAL)/slide_app.c
+    PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
+    SLIDE_SRC := $(SRC_DEVICE)/slide.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499-app.so
 else
+    VARIANT_CFLAGS := -DAPP_PAYLOAD=0
     PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
     SLIDE_SRC := $(SRC_DEVICE)/slide.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499

@@ -19,8 +19,8 @@ class PayloadRepository(private val context: Context) {
 
     // Pin the manifest commit so raw CDN cache cannot serve an older payload URL.
     private val manifestUrlList = listOf(
+        "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/support/targets-v2.json",
         "https://raw.githubusercontent.com/sir990928/-/76c47a1/Root-My-Galaxy-Payloads/support/targets-v2.json",
-        "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/support/targets-v2.json"
     )
 
     fun loadTargets(): List<TargetProfile> {
@@ -73,6 +73,9 @@ class PayloadRepository(private val context: Context) {
                     val count = input.read(buffer)
                     if (count < 0) break
                     total += count
+                    require(total <= artifact.size) {
+                        context.getString(R.string.repo_size_exceeded, label)
+                    }
                     output.write(buffer, 0, count)
                 }
                 output.fd.sync()
@@ -80,6 +83,9 @@ class PayloadRepository(private val context: Context) {
         }
         connection.disconnect()
 
+        require(total == artifact.size) {
+            context.getString(R.string.repo_size_mismatch, label)
+        }
         if (destination.exists()) destination.delete()
         require(temporary.renameTo(destination)) {
             context.getString(R.string.repo_finalize_failed, label)
