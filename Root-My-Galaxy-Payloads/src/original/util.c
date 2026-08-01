@@ -21,11 +21,6 @@ uintptr_t fake_left;
 uintptr_t fake_fops;
 uintptr_t binwrite_target;
 char ashmem_path[256] = "/dev/ashmem";
-uintptr_t slide_p0_offset;
-uintptr_t slide_oracle_parent;
-uintptr_t slide_oracle_target;
-uintptr_t p0_gate_page_struct;
-uintptr_t p0_probe_page_struct;
 
 void setup_kernelsnitch(void) {
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
@@ -780,8 +775,4 @@ ssize_t kernel_write_data(int fd, uintptr_t target, const void *data, size_t len
 
 ssize_t kernel_read_data(int fd, uintptr_t target, void *data, size_t len) {
   return configfs_read_once(fd, target, data, len);
-}
-
-int reclaim_receiver_fd(void) {
-  return reclaim_sv[1];
 }

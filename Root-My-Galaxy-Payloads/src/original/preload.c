@@ -11,9 +11,6 @@
 #define APP_MIN_BOOT_UPTIME_SEC 120
 
 #if defined(APP_PAYLOAD) && defined(SLIDE_P0_OFFSET_CANDIDATES)
-extern uintptr_t p0_gate_page_struct;
-extern uintptr_t p0_probe_page_struct;
-
 struct app_p0_shared_state {
   atomic_int dirty;
   atomic_int ready;

