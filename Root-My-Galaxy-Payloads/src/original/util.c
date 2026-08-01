@@ -21,6 +21,11 @@ uintptr_t fake_left;
 uintptr_t fake_fops;
 uintptr_t binwrite_target;
 char ashmem_path[256] = "/dev/ashmem";
+uintptr_t slide_p0_offset;
+uintptr_t slide_oracle_parent;
+uintptr_t slide_oracle_target;
+uintptr_t p0_gate_page_struct;
+uintptr_t p0_probe_page_struct;
 
 void setup_kernelsnitch(void) {
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
