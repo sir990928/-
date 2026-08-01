@@ -1,4 +1,4 @@
-name: Build S9380ZHU1AYA1 APP
+name: 构建 S9380ZHU1AYA1 注入APP
 
 on:
   push:
@@ -21,22 +21,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out source
+      - name: 拉取源码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 21
+      - name: 配置 JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: "21"
           distribution: temurin
           cache: gradle
 
-      - name: Set up Android SDK
+      - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android build tools
+      - name: 安装编译工具
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -45,17 +45,19 @@ jobs:
             "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - name: Build payload and helper
+      - name: 编译漏洞载荷与守护进程
         shell: bash
         run: |
           make -C Root-My-Galaxy-Payloads \
-            TARGET="${TARGET}" API=35 clean all
+            TARGET="${TARGET}" API=35 VARIANT=app clean all
+          cp "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root-app.so" \
+             "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so"
           ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
           sha256sum \
             "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so" \
             "Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-root"
 
-      - name: Stage runtime artifacts
+      - name: 整理产物目录
         shell: bash
         run: |
           payload="Root-My-Galaxy-Payloads/build/${TARGET}/cve-2026-43499-app.so"
@@ -73,25 +75,25 @@ jobs:
           mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
           git diff --stat
 
-      - name: Build debug APK
+      - name: 编译正式发布版APK
         working-directory: Root-My-Galaxy
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload APK and runtime artifacts
+      - name: 上传APK与运行库产物
         uses: actions/upload-artifact@v4
         with:
           name: Root-My-Galaxy-${{ env.TARGET }}
           retention-days: 30
           if-no-files-found: error
           path: |
-            Root-My-Galaxy/app/build/outputs/apk/debug/*.apk
+            Root-My-Galaxy/app/build/outputs/apk/release/*.apk
             Root-My-Galaxy-Payloads/artifacts/${{ env.TARGET }}/cve-2026-43499-app.so
             Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
             Root-My-Galaxy-Payloads/support/targets-v2.json
 
-      - name: Publish generated runtime files
+      - name: 提交更新后的载荷文件
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -101,8 +103,8 @@ jobs:
             "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
             Root-My-Galaxy-Payloads/support/targets-v2.json
           if git diff --cached --quiet; then
-            echo "Generated runtime files are unchanged"
+            echo "载荷文件无改动，跳过提交"
           else
-            git commit -m "ci: publish ${TARGET} runtime files [skip ci]"
+            git commit -m "ci: 更新 ${TARGET} 运行时文件 [skip ci]"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
