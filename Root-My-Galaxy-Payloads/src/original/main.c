@@ -16,6 +16,8 @@ atomic_int consumer_success;
 atomic_int main_route_delay_usec;
 atomic_int pipe_prepare_request;
 atomic_int pipe_prepare_done;
+int app_trigger_fops_slide_route(void);
+
 int memfd_leak;
 
 void *waiter_thread(void *arg __attribute__((unused))) {
