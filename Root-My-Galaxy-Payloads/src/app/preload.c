@@ -140,6 +140,17 @@ __attribute__((constructor)) static void load(void) {
       char delay[16];
       snprintf(delay, sizeof(delay), "%d", delay_usec);
       SYSCHK(setenv("PSELECT_DELAY_USEC", delay, 1));
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+      static const int fops_delays[] = {
+        70000, 60000, 80000, 40000, 90000, 50000,
+        30000, 20000, 75000, 65000, 85000, 55000,
+      };
+      int fops_delay = fops_delays[(attempt - 1) %
+          (sizeof(fops_delays) / sizeof(fops_delays[0]))];
+      char fops_delay_arg[16];
+      snprintf(fops_delay_arg, sizeof(fops_delay_arg), "%d", fops_delay);
+      SYSCHK(setenv("APP_FOPS_DELAY_USEC", fops_delay_arg, 1));
+#endif
 #if defined(APP_PAYLOAD) && defined(SLIDE_P0_OFFSET_CANDIDATES)
       const char *forced_offset = getenv("SLIDE_P0_OFFSET");
       if (forced_offset) {
