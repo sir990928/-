@@ -39,6 +39,10 @@
 
 #include "kernelsnitch/utils.h"
 
+#if defined(APP_PHYS_P0_ORACLE) && APP_PHYS_P0_ORACLE
+#include P0_FINGERPRINT_HEADER
+#endif
+
 #define KERNEL_PAGE_SETUP_ATTEMPTS 6
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
 #define SLIDE_KERNEL_PAGE_SETUP_ATTEMPTS 2

@@ -8,6 +8,7 @@ endif
 ROOT := .
 SRC_ORIGINAL := $(ROOT)/src/original
 SRC_DEVICE := $(ROOT)/src/device
+SRC_APP := $(ROOT)/src/app
 TARGET_DIR := $(ROOT)/target/$(TARGET)
 INCLUDE_DIR := $(ROOT)/include
 TARGET_INCLUDE := $(INCLUDE_DIR)/targets/$(TARGET)/target.h
@@ -24,11 +25,21 @@ VARIANT ?= adb
 
 ifeq ($(VARIANT),app)
     VARIANT_CFLAGS := -DAPP_PAYLOAD=1
-    PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
-    SLIDE_SRC := $(SRC_DEVICE)/slide.c
+    SOURCE_CPPFLAGS := $(DEVICE_CPPFLAGS)
+    MAIN_SRC := $(SRC_APP)/main.c
+    UTIL_SRC := $(SRC_APP)/util.c
+    FOPS_SRC := $(SRC_APP)/fops.c
+    PIPE_SRC := $(SRC_APP)/pipe.c
+    PRELOAD_SRC := $(SRC_APP)/preload.c
+    SLIDE_SRC := $(SRC_APP)/slide.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499-app.so
 else
     VARIANT_CFLAGS := -DAPP_PAYLOAD=0
+    SOURCE_CPPFLAGS := $(ORIGINAL_CPPFLAGS)
+    MAIN_SRC := $(SRC_ORIGINAL)/main.c
+    UTIL_SRC := $(SRC_ORIGINAL)/util.c
+    FOPS_SRC := $(SRC_ORIGINAL)/fops.c
+    PIPE_SRC := $(SRC_ORIGINAL)/pipe.c
     PRELOAD_SRC := $(SRC_ORIGINAL)/preload_minimal.c
     SLIDE_SRC := $(SRC_DEVICE)/slide.c
     PAYLOAD := $(OUT_DIR)/cve-2026-43499
@@ -57,17 +68,17 @@ $(TARGET_INCLUDE): $(TARGET_DIR)/target.h
 $(OBJ_DIR) $(OUT_DIR):
 	mkdir -p $@
 
-$(OBJ_DIR)/main.o: $(SRC_ORIGINAL)/main.c $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+$(OBJ_DIR)/main.o: $(MAIN_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(SOURCE_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/util.o: $(SRC_ORIGINAL)/util.c $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+$(OBJ_DIR)/util.o: $(UTIL_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(SOURCE_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/fops.o: $(SRC_ORIGINAL)/fops.c $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+$(OBJ_DIR)/fops.o: $(FOPS_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(SOURCE_CPPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/pipe.o: $(SRC_ORIGINAL)/pipe.c $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+$(OBJ_DIR)/pipe.o: $(PIPE_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(SOURCE_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/root_compat_globals.o: $(SRC_ORIGINAL)/root_compat_globals.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
@@ -76,10 +87,10 @@ $(OBJ_DIR)/root-umh.o: $(SRC_DEVICE)/root.c $(TARGET_INCLUDE) | $(OBJ_DIR)
 	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(DEVICE_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/preload.o: $(PRELOAD_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(SOURCE_CPPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/slide.o: $(SLIDE_SRC) $(TARGET_INCLUDE) | $(OBJ_DIR)
-	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(ORIGINAL_CPPFLAGS) -c $< -o $@
+	$(CLANG) $(COMMON_CFLAGS) $(VARIANT_CFLAGS) -fPIC $(if $(filter app,$(VARIANT)),$(DEVICE_CPPFLAGS),$(ORIGINAL_CPPFLAGS)) -c $< -o $@
 
 $(PAYLOAD): $(OBJECTS) | $(OUT_DIR)
 	$(CLANG) $(TARGET_FLAGS) -shared -fuse-ld=lld \

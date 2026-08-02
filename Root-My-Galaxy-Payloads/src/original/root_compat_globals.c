@@ -11,4 +11,6 @@ uint32_t cred_sid_before = 0xffffffff;
 uint32_t cred_sid_after = 0xffffffff;
 uint32_t real_cred_sid_before = 0xffffffff;
 uint32_t real_cred_sid_after = 0xffffffff;
+#if !defined(APP_PAYLOAD) || !APP_PAYLOAD
 uintptr_t slide_p0_offset;
+#endif
