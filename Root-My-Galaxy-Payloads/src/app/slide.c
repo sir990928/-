@@ -327,7 +327,11 @@ void slide_pselect_stack_copy(void) {
 
   int sched_ok = atomic_load(&slide_consume_sched_ok) > 0;
   int fops_route = slide_is_app_fops_route();
-  int write_window = sched_ok && (ret > 0 || fops_route);
+#if defined(APP_PAYLOAD) && APP_PAYLOAD
+  int write_window = sched_ok;
+#else
+  int write_window = ret > 0 && sched_ok;
+#endif
   pr_info("slide pselect returned nfds=%d pad=%d ret=%d errno=%d "
           "elapsed_usec=%zu "
           "ready=%d seen=%d entered=%d calls=%d sched_ok=%d "
