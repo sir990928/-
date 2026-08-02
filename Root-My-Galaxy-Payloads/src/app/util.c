@@ -349,7 +349,7 @@ uintptr_t p0_alias_image_offset(uintptr_t data_alias) {
 }
 
 uintptr_t data_addr(uintptr_t image_addr) {
-  return p0_data_alias(image_addr) + slide_p0_offset;
+  return p0_data_alias(image_addr);
 }
 
 uintptr_t kaslr_image_addr(uintptr_t image_addr) {
