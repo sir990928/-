@@ -336,6 +336,10 @@ int try_cfi_stage(void) {
   uint64_t pre_fops = 0;
   ssize_t pre_rb = configfs_read_once(
       fd, misc_fops, &pre_fops, sizeof(pre_fops));
+  pr_info("cfi targets page=%016zx fake_fops=%016zx misc_fops=%016zx "
+          "bin_target=%016zx scratch_off=%x pre_ret=%zd pre_read=%016llx\n",
+          page_base, fake_fops, misc_fops, binwrite_target, SCRATCH_OFF,
+          pre_rb, (unsigned long long)pre_fops);
   if (pre_rb != (ssize_t)sizeof(pre_fops) || pre_fops != fake_fops) {
     pr_info("cfi misc_fops precheck note ret=%zd target=%016zx "
             "read=%016llx want=%016zx errno=%d\n",

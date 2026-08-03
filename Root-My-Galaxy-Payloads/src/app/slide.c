@@ -48,7 +48,7 @@ static int slide_commit_stext(uint64_t stext, const char *source);
 static int slide_is_app_fops_route(void) {
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
   return slide_oracle_target != 0 &&
-         slide_oracle_target == misc_fops_data_addr();
+         slide_oracle_target == data_addr(ASHMEM_MISC_FOPS);
 #else
   return 0;
 #endif
