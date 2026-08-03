@@ -59,37 +59,53 @@ class PayloadRepository(private val context: Context) {
         label: String,
         onProgress: (String) -> Unit,
     ): File {
-        onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        val connection = open(artifact.url)
-        
-        var total = 0L
-        connection.inputStream.use { input ->
-            FileOutputStream(temporary).use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
-                    require(total <= artifact.size) {
-                        context.getString(R.string.repo_size_exceeded, label)
+        var lastError: IOException? = null
+
+        repeat(MAX_ARTIFACT_ATTEMPTS) { attempt ->
+            try {
+                onProgress(context.getString(R.string.repo_downloading, label))
+                val connection = open(artifact.url)
+                try {
+                    var total = 0L
+                    connection.inputStream.use { input ->
+                        FileOutputStream(temporary).use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                require(total <= artifact.size) {
+                                    context.getString(R.string.repo_size_exceeded, label)
+                                }
+                                output.write(buffer, 0, count)
+                            }
+                            output.fd.sync()
+                        }
                     }
-                    output.write(buffer, 0, count)
+                    require(total == artifact.size) {
+                        context.getString(R.string.repo_size_mismatch, label)
+                    }
+                } finally {
+                    connection.disconnect()
                 }
-                output.fd.sync()
+
+                if (destination.exists()) destination.delete()
+                require(temporary.renameTo(destination)) {
+                    context.getString(R.string.repo_finalize_failed, label)
+                }
+                onProgress(context.getString(R.string.repo_verified, label))
+                return destination
+            } catch (error: IOException) {
+                lastError = error
+                temporary.delete()
+                if (attempt + 1 < MAX_ARTIFACT_ATTEMPTS) {
+                    Thread.sleep(RETRY_DELAY_MILLIS * (attempt + 1))
+                }
             }
         }
-        connection.disconnect()
 
-        require(total == artifact.size) {
-            context.getString(R.string.repo_size_mismatch, label)
-        }
-        if (destination.exists()) destination.delete()
-        require(temporary.renameTo(destination)) {
-            context.getString(R.string.repo_finalize_failed, label)
-        }
-        onProgress(context.getString(R.string.repo_verified, label))
-        return destination
+        throw lastError ?: IOException("Unable to download $label")
     }
 
     private fun tryDownloadUrl(urlCandidates: List<String>, maximum: Int): ByteArray {
@@ -136,5 +152,7 @@ class PayloadRepository(private val context: Context) {
 
     companion object {
         private const val MAX_MANIFEST_BYTES = 256 * 1024
+        private const val MAX_ARTIFACT_ATTEMPTS = 3
+        private const val RETRY_DELAY_MILLIS = 1_000L
     }
 }
