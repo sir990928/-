@@ -329,7 +329,12 @@ void slide_pselect_stack_copy(void) {
   int fops_route = slide_is_app_fops_route();
   int write_window = ret > 0 && sched_ok;
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
-  if (fops_route && sched_ok) {
+  /*
+   * APP p0 uses the pipe oracle as the authoritative check.  On this
+   * kernel pselect can return 0 after the scheduler-backed write already
+   * happened, so requiring ret > 0 rejects valid p0 attempts as status 256.
+   */
+  if (sched_ok) {
     write_window = 1;
   }
 #endif

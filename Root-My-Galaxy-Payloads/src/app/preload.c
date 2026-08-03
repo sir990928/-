@@ -1,7 +1,7 @@
 #include "common.h"
 
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
-#define DEFAULT_EXPLOIT_ATTEMPTS 24
+#define DEFAULT_EXPLOIT_ATTEMPTS 8
 #else
 #define DEFAULT_EXPLOIT_ATTEMPTS 16
 #endif
