@@ -144,7 +144,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 appendLog(app.getString(R.string.log_download_verified))
 
                 setPhase(InstallPhase.Exploiting, app.getString(R.string.status_exploit_running))
-                executeExploit(payloads.exploit, profile)
+                executeExploit(payloads.exploit)
 
                 setPhase(InstallPhase.LoadingKernelSu, app.getString(R.string.status_ksu_loading))
                 installKernelSu(payloads)
@@ -160,7 +160,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private suspend fun executeExploit(payload: File, profile: TargetProfile) {
+    private suspend fun executeExploit(payload: File) {
         val logFile = File(app.filesDir, "exploit.log")
         logFile.delete()
         val helper = helperFile()
@@ -174,11 +174,6 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             helper.absolutePath,
             logFile.absolutePath,
         ).redirectErrorStream(true)
-        if (profile.profileId == "pa3q-S9380ZHU1AYA1") {
-            processBuilder.environment()["EXPLOIT_ATTEMPTS"] = "24"
-            processBuilder.environment()["PSELECT_DELAY_USEC"] = "20000"
-            processBuilder.environment()["APP_USE_ORIGINAL_PSELECT"] = "1"
-        }
         cachedP0Offset(bootToken)?.let { processBuilder.environment()[P0_OFFSET_ENV] = it }
         val process = processBuilder.start()
 
