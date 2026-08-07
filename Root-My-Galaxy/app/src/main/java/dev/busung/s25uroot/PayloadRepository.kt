@@ -92,9 +92,8 @@ class PayloadRepository(private val context: Context) {
 
     private fun resolveMainCommit(): String {
         val response = downloadBytes(COMMIT_API_URL, MAX_COMMIT_RESPONSE_BYTES)
-        val commit = JSONObject(response.toString(Charsets.UTF_8))
-            .getJSONObject("object")
-            .getString("sha")
+        val json = JSONObject(response.toString(Charsets.UTF_8))
+        val commit = json.getString("sha")
         require(commit.matches(Regex("[0-9a-f]{40}"))) { context.getString(R.string.repo_commit_invalid) }
         return commit
     }
@@ -137,9 +136,9 @@ class PayloadRepository(private val context: Context) {
 
     companion object {
         private const val COMMIT_API_URL =
-            "https://api.github.com/repos/sir990928/-/git/ref/heads/main"
+            "https://gitee.com/api/v5/repos/lin0928/samsung-root/commits/main"
         private const val RAW_REPOSITORY =
-            "https://raw.githubusercontent.com/sir990928/-"
+            "https://gitee.com/lin0928/samsung-root/raw"
         private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/"
         private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
         private const val MAX_MANIFEST_BYTES = 256 * 1024
