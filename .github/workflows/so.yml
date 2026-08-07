@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
 
       - name: 安装基础工具
-        run: sudo apt update && sudo apt install -y make zip unzip wget jq
+        run: sudo apt update && sudo apt install -y make zip unzip wget
 
       - name: 下载并安装 NDK r29
         run: |
@@ -71,11 +71,8 @@ jobs:
              Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
           
           payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so")"
-          tmp_manifest="$(mktemp)"
-          jq --indent 2 --arg profile "$TARGET_NAME" --argjson size "$payload_size" \
-            '(.payloads[] | select(.payloadId == $profile) | .exploit.size) = $size' \
-            Root-My-Galaxy-Payloads/support/targets-v3.json > "$tmp_manifest"
-          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v3.json
+          sed -i "s|\"size\": [0-9]*|\"size\": $payload_size|" \
+            Root-My-Galaxy-Payloads/support/targets-v3.json
           
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
