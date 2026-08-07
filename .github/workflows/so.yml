@@ -1,0 +1,103 @@
+name: 构建 CVE Payload AYA1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-payload.yml"
+      - "Root-My-Galaxy-Payloads/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_NAME: pa3q-S9380ZHU1AYA1
+      API: "35"
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.12904245
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装基础工具
+        run: sudo apt update && sudo apt install -y make zip unzip wget
+
+      - name: 下载并安装 NDK r29
+        run: |
+          set -eu
+          echo "下载 NDK r29..."
+          wget -q --show-progress --timeout=60 --tries=5 \
+            "https://dl.google.com/android/repository/android-ndk-r29-linux.zip" \
+            -O /tmp/android-ndk.zip
+          
+          echo "解压 NDK..."
+          unzip -q /tmp/android-ndk.zip -d /tmp/
+          
+          mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
+          mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
+          rm /tmp/android-ndk.zip
+          
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
+
+      - name: 验证 NDK
+        run: |
+          CLANG="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang"
+          test -x "$CLANG"
+          "$CLANG" --version
+
+      - name: 编译漏洞载荷与守护进程
+        run: |
+          make -C Root-My-Galaxy-Payloads \
+            TARGET="${TARGET_NAME}" API="${API}" VARIANT=app clean all
+          
+          OUTDIR="Root-My-Galaxy-Payloads/build/${TARGET_NAME}"
+          test -s "${OUTDIR}/cve-2026-43499-app.so"
+          test -s "${OUTDIR}/cve-2026-43499-root"
+          ls -lh "${OUTDIR}/"
+
+      - name: 提交产物到仓库
+        run: |
+          mkdir -p Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/
+          cp Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-app.so \
+             Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so
+          cp Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root \
+             Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-root
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f \
+            "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so" \
+            "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-root"
+          
+          if git diff --cached --quiet; then
+            echo "文件无改动，跳过提交"
+          else
+            git commit -m "ci: 更新 ${TARGET_NAME} Payload [skip ci]"
+            git pull --rebase origin main
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: 输出哈希
+        run: |
+          sha256sum \
+            Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-app.so \
+            Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root
+
+      - name: 打包产物
+        run: |
+          zip -j payload-build.zip \
+            Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-app.so \
+            Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root
+
+      - name: 上传制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TARGET_NAME }}-r29-build
+          path: payload-build.zip
+          retention-days: 30
