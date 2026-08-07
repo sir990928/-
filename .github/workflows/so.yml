@@ -74,15 +74,15 @@ jobs:
           tmp_manifest="$(mktemp)"
           jq --arg profile "$TARGET_NAME" --argjson size "$payload_size" \
             '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
-            Root-My-Galaxy-Payloads/support/targets-v2.json > "$tmp_manifest"
-          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
+            Root-My-Galaxy-Payloads/support/targets-v3.json > "$tmp_manifest"
+          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v3.json
           
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f \
             "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so" \
             "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
-            Root-My-Galaxy-Payloads/support/targets-v2.json
+            Root-My-Galaxy-Payloads/support/targets-v3.json
           
           if git diff --cached --quiet; then
             echo "文件无改动，跳过提交"
