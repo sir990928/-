@@ -141,6 +141,7 @@ class PayloadRepository(private val context: Context) {
             "https://gitee.com/lin0928/samsung-root/raw"
         private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/"
         private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
-        private const val MAX_MANIFEST_BYTES = 256 * 1024
+        private const val MAX_MANIFEST_BYTES = 1024 * 1024
+
     }
 }
