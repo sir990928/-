@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/build-payload.yml"
+      - ".github/workflows/so.yml"
       - "Root-My-Galaxy-Payloads/**"
   workflow_dispatch:
 
@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
 
       - name: 安装基础工具
-        run: sudo apt update && sudo apt install -y make zip unzip wget
+        run: sudo apt update && sudo apt install -y make zip unzip wget jq
 
       - name: 下载并安装 NDK r29
         run: |
@@ -71,11 +71,12 @@ jobs:
              Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
           
           payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so")"
-          ksud_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root")"
-          sed -i "/\"exploit\"/,/\"size\"/s|\"size\": [0-9]*|\"size\": $payload_size|" \
-            Root-My-Galaxy-Payloads/support/targets-v3.json
-          sed -i "/\"kernelsu\"/,/\"size\"/s|\"size\": [0-9]*|\"size\": $ksud_size|" \
-            Root-My-Galaxy-Payloads/support/targets-v3.json
+          ksud_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/kernelsu/ksud-s25u-kdp")"
+          tmp_manifest="$(mktemp)"
+          jq --arg profile "$TARGET_NAME" --argjson esize "$payload_size" --argjson ksize "$ksud_size" \
+            '(.payloads[] | select(.payloadId == $profile) | .exploit.size) = $esize | (.payloads[] | select(.payloadId == $profile) | .kernelsu.size) = $ksize' \
+            Root-My-Galaxy-Payloads/support/targets-v3.json | jq --indent 2 '.' > "$tmp_manifest"
+          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v3.json
           
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
