@@ -7,7 +7,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.io.IOException
+import org.json.JSONObject
 
 data class VerifiedPayloads(
     val profile: TargetProfile,
@@ -16,14 +16,13 @@ data class VerifiedPayloads(
 )
 
 class PayloadRepository(private val context: Context) {
-
-    private val manifestUrlList = listOf(
-        "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/support/targets-v2.json",
-    )
-
     fun loadTargets(): List<TargetProfile> {
-        val manifestBytes = tryDownloadUrl(manifestUrlList, MAX_MANIFEST_BYTES)
-        return SupportManifest.parse(manifestBytes).targets
+        val commit = resolveMainCommit()
+        val manifestBytes = downloadBytes(rawUrl(commit, "support/targets-v2.json"), MAX_MANIFEST_BYTES)
+        return SupportManifest.parse(manifestBytes).targets.map { profile -> profile.copy(
+            exploit = profile.exploit.copy(url = pinArtifactUrl(profile.exploit.url, commit)),
+            kernelSu = profile.kernelSu.copy(url = pinArtifactUrl(profile.kernelSu.url, commit)),
+        ) }
     }
 
     fun resolveTarget(snapshot: DeviceSnapshot): TargetProfile = loadTargets()
@@ -43,7 +42,7 @@ class PayloadRepository(private val context: Context) {
             onProgress,
         )
         val kernelSu = downloadArtifact(
-            profile.kernelSu.artifact,
+            profile.kernelSu,
             File(directory, "ksud-s25u-kdp"),
             context.getString(R.string.artifact_kernelsu),
             onProgress,
@@ -59,66 +58,52 @@ class PayloadRepository(private val context: Context) {
         label: String,
         onProgress: (String) -> Unit,
     ): File {
+        onProgress(context.getString(R.string.repo_downloading, label))
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        var lastError: IOException? = null
-
-        repeat(MAX_ARTIFACT_ATTEMPTS) { attempt ->
-            try {
-                onProgress(context.getString(R.string.repo_downloading, label))
-                val connection = open(artifact.url)
-                try {
-                    var total = 0L
-                    connection.inputStream.use { input ->
-                        FileOutputStream(temporary).use { output ->
-                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                            while (true) {
-                                val count = input.read(buffer)
-                                if (count < 0) break
-                                total += count
-                                require(total <= artifact.size) {
-                                    context.getString(R.string.repo_size_exceeded, label)
-                                }
-                                output.write(buffer, 0, count)
-                            }
-                            output.fd.sync()
-                        }
+        val connection = open(artifact.url)
+        require(connection.contentLengthLong == -1L || connection.contentLengthLong == artifact.size) {
+            context.getString(R.string.repo_size_mismatch, label)
+        }
+        var total = 0L
+        connection.inputStream.use { input ->
+            FileOutputStream(temporary).use { output ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    require(total <= artifact.size) {
+                        context.getString(R.string.repo_size_exceeded, label)
                     }
-                    require(total == artifact.size) {
-                        context.getString(R.string.repo_size_mismatch, label)
-                    }
-                } finally {
-                    connection.disconnect()
+                    output.write(buffer, 0, count)
                 }
-
-                if (destination.exists()) destination.delete()
-                require(temporary.renameTo(destination)) {
-                    context.getString(R.string.repo_finalize_failed, label)
-                }
-                onProgress(context.getString(R.string.repo_verified, label))
-                return destination
-            } catch (error: IOException) {
-                lastError = error
-                temporary.delete()
-                if (attempt + 1 < MAX_ARTIFACT_ATTEMPTS) {
-                    Thread.sleep(RETRY_DELAY_MILLIS * (attempt + 1))
-                }
+                output.fd.sync()
             }
         }
-
-        throw lastError ?: IOException("Unable to download $label")
+        connection.disconnect()
+        require(total == artifact.size) { context.getString(R.string.repo_incomplete, label) }
+        if (destination.exists()) destination.delete()
+        require(temporary.renameTo(destination)) {
+            context.getString(R.string.repo_finalize_failed, label)
+        }
+        onProgress(context.getString(R.string.repo_verified, label))
+        return destination
     }
 
-    private fun tryDownloadUrl(urlCandidates: List<String>, maximum: Int): ByteArray {
-        var lastException: Exception? = null
-        for(url in urlCandidates) {
-            try {
-                return downloadBytes(url, maximum)
-            } catch (e: Exception) {
-                lastException = e
-                continue
-            }
-        }
-        throw lastException ?: IOException("数据源无法连接")
+    private fun resolveMainCommit(): String {
+        val response = downloadBytes(COMMIT_API_URL, MAX_COMMIT_RESPONSE_BYTES)
+        val commit = JSONObject(response.toString(Charsets.UTF_8))
+            .getJSONObject("object")
+            .getString("sha")
+        require(commit.matches(Regex("[0-9a-f]{40}"))) { context.getString(R.string.repo_commit_invalid) }
+        return commit
+    }
+
+    private fun rawUrl(commit: String, path: String) = "$RAW_REPOSITORY/$commit/$path"
+
+    private fun pinArtifactUrl(url: String, commit: String): String {
+        require(url.startsWith(MUTABLE_RAW_PREFIX)) { context.getString(R.string.repo_url_invalid) }
+        return "$RAW_REPOSITORY/$commit/${url.removePrefix(MUTABLE_RAW_PREFIX)}"
     }
 
     private fun downloadBytes(url: String, maximum: Int): ByteArray {
@@ -142,17 +127,21 @@ class PayloadRepository(private val context: Context) {
 
     private fun open(url: String): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
+            connectTimeout = 15_000
             readTimeout = 60_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            setRequestProperty("User-Agent", "S25URoot/${BuildConfig.VERSION_NAME}")
             connect()
             require(responseCode == HttpURLConnection.HTTP_OK) { "HTTP $responseCode" }
         }
 
     companion object {
+        private const val COMMIT_API_URL =
+            "https://api.github.com/repos/sir990928/-/git/ref/heads/main"
+        private const val RAW_REPOSITORY =
+            "https://raw.githubusercontent.com/sir990928/-"
+        private const val MUTABLE_RAW_PREFIX = "$RAW_REPOSITORY/main/"
+        private const val MAX_COMMIT_RESPONSE_BYTES = 16 * 1024
         private const val MAX_MANIFEST_BYTES = 256 * 1024
-        private const val MAX_ARTIFACT_ATTEMPTS = 3
-        private const val RETRY_DELAY_MILLIS = 1_000L
     }
 }

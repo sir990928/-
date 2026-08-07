@@ -1,9 +1,5 @@
 package dev.busung.s25uroot
 
-import androidx.compose.runtime.getValue
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -14,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,21 +36,23 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.busung.s25uroot.ui.theme.RootMyGalaxyTheme
 import kotlinx.coroutines.delay
@@ -98,13 +95,13 @@ class InstallActivity : ComponentActivity() {
     }
 }
 
-private data class InstallerStep(
+internal data class InstallerStep(
     @StringRes val title: Int,
     @StringRes val detail: Int,
     val icon: ImageVector,
 )
 
-private val installerSteps = listOf(
+internal val installerSteps = listOf(
     InstallerStep(R.string.step_support_title, R.string.step_support_detail, Icons.Rounded.Security),
     InstallerStep(R.string.step_download_title, R.string.step_download_detail, Icons.Rounded.CloudDownload),
     InstallerStep(R.string.step_exploit_title, R.string.step_exploit_detail, Icons.Rounded.Memory),
@@ -203,6 +200,11 @@ private fun InstallerStatusCard(installState: InstallUiState) {
                 InstallPhase.Failed -> MaterialTheme.colorScheme.errorContainer
                 else -> MaterialTheme.colorScheme.primaryContainer
             },
+            contentColor = if (installState.phase == InstallPhase.Failed) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            },
         ),
     ) {
         Column(
@@ -215,7 +217,10 @@ private fun InstallerStatusCard(installState: InstallUiState) {
             ) {
                 AnimatedContent(targetState = installState.phase, label = "install-status-icon") { phase ->
                     when {
-                        installState.busy -> LoadingIndicator(modifier = Modifier.size(44.dp))
+                        installState.busy -> LoadingIndicator(
+                            modifier = Modifier.size(44.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                         phase == InstallPhase.Installed -> Icon(
                             Icons.Rounded.Check,
                             contentDescription = null,
@@ -235,13 +240,15 @@ private fun InstallerStatusCard(installState: InstallUiState) {
                     )
                     Text(
                         text = installPhaseDetail(installState.phase),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = LocalContentColor.current.copy(alpha = 0.78f),
                     )
                 }
             }
             LinearProgressIndicator(
                 progress = { installProgress(installState.phase) },
                 modifier = Modifier.fillMaxWidth(),
+                color = LocalContentColor.current,
+                trackColor = LocalContentColor.current.copy(alpha = 0.2f),
                 drawStopIndicator = {},
             )
         }
@@ -278,7 +285,7 @@ private fun InstallerSteps(phase: InstallPhase) {
                         contentColor = if (stepState >= 1) {
                             MaterialTheme.colorScheme.onPrimary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MaterialTheme.colorScheme.onSurface
                         },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -297,11 +304,14 @@ private fun InstallerSteps(phase: InstallPhase) {
                         Text(
                             text = stringResource(step.detail),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
                         )
                     }
                     if (stepState == 1 && phase !in setOf(InstallPhase.Failed, InstallPhase.Ready)) {
-                        LoadingIndicator(modifier = Modifier.size(24.dp))
+                        LoadingIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             }
@@ -315,7 +325,6 @@ private fun InstallerLog(
     modifier: Modifier,
     scrollState: androidx.compose.foundation.ScrollState,
 ) {
-    val context = LocalContext.current
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -324,37 +333,20 @@ private fun InstallerLog(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text(stringResource(R.string.install_live_progress), style = MaterialTheme.typography.titleMedium)
             Text(
-                stringResource(R.string.install_live_progress),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            Column(
+                text = output.ifBlank { stringResource(R.string.install_preparing) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .verticalScroll(scrollState)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("install_log", output)
-                            clipboard.setPrimaryClip(clip)
-                            android.widget.Toast.makeText(context, "完整日志已复制", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    )
-            ) {
-                Text(
-                    text = output.ifBlank { stringResource(R.string.install_preparing) },
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    softWrap = true
-                )
-            }
+                    .verticalScroll(scrollState),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

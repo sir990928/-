@@ -8,7 +8,7 @@
 #define DEFAULT_PSELECT_DELAY_USEC 20000
 #define DEFAULT_ATTEMPT_TIMEOUT_SEC 90
 #define DEFAULT_P0_ATTEMPT_TIMEOUT_SEC 20
-#define APP_MIN_BOOT_UPTIME_SEC 120
+#define APP_MIN_BOOT_UPTIME_SEC 0
 
 #if defined(APP_PAYLOAD) && defined(SLIDE_P0_OFFSET_CANDIDATES)
 struct app_p0_shared_state {
@@ -235,7 +235,7 @@ __attribute__((constructor)) static void load(void) {
 #if defined(APP_PAYLOAD) && APP_PAYLOAD
     if (attempt < max_attempts) {
       pr_info("safe retry quiet delay seconds=5\n");
-      sleep(5);
+      sleep(2);
     }
 #endif
   }

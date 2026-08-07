@@ -6,14 +6,13 @@ plugins {
 android {
     namespace = "dev.busung.s25uroot"
     compileSdk = 37
-    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "dev.busung.s25uroot"
         minSdk = 33
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.2.3"
+        versionCode = 12
+        versionName = "0.2.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
@@ -23,30 +22,13 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
-                cppFlags += "-Os"
-                cppFlags += "-fvisibility=hidden"
             }
-        }
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-        debug {
-            isMinifyEnabled = false
         }
     }
 
     buildFeatures {
         compose = true
-        buildConfig = true // 恢复开启，修复BuildConfig找不到报错
+        buildConfig = true
     }
 
     externalNativeBuild {
@@ -64,7 +46,6 @@ android {
     packaging {
         jniLibs.useLegacyPackaging = true
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        resources.excludes += "**/*.version"
     }
 }
 
@@ -87,12 +68,11 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.5.0-alpha24")
-
-    // 恢复图标依赖！解决 Icons 找不到编译错误
     implementation("androidx.compose.material:material-icons-extended")
-
     implementation("com.materialkolor:material-kolor:4.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
