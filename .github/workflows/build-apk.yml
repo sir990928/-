@@ -14,7 +14,9 @@ permissions:
 
 env:
   TARGET: pa3q-S9380ZHU1AYA1
-  NDK_VERSION: 27.2.12479018
+  API: "35"
+  ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.12904245
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
@@ -33,27 +35,49 @@ jobs:
           distribution: temurin
           cache: gradle
 
-      - name: 配置 Android SDK
+      - name: 安装基础工具
+        run: sudo apt update && sudo apt install -y make zip unzip wget
+
+      - name: 清理预装安卓SDK
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo mkdir -p /usr/local/lib/android/sdk
+          sudo chown -R $USER:$USER /usr/local/lib/android
+
+      - name: 安装 Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: 安装编译工具
-        shell: bash
+      - name: 下载并安装 NDK r29
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "cmake;3.22.1" \
-            "ndk;${NDK_VERSION}"
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          set -eu
+          echo "下载 NDK r29..."
+          wget -q --show-progress --timeout=60 --tries=5 \
+            "https://dl.google.com/android/repository/android-ndk-r29-linux.zip" \
+            -O /tmp/android-ndk.zip
+          
+          echo "解压 NDK..."
+          unzip -q /tmp/android-ndk.zip -d /tmp/
+          
+          mkdir -p "${ANDROID_SDK_ROOT}/ndk"
+          mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
+          rm /tmp/android-ndk.zip
+          
+          echo "NDK r29 安装完成"
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
+
+      - name: 验证 NDK
+        run: |
+          CLANG="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${API}-clang"
+          test -x "$CLANG"
+          "$CLANG" --version
 
       - name: 编译漏洞载荷与守护进程
-        shell: bash
         run: |
           make -C Root-My-Galaxy-Payloads \
-            TARGET="${TARGET}" API=35 VARIANT=app clean all
+            TARGET="${TARGET}" API="${API}" VARIANT=app clean all
           ls -l "Root-My-Galaxy-Payloads/build/${TARGET}/"
 
       - name: 更新仓库文件
-        shell: bash
         run: |
           mkdir -p Root-My-Galaxy-Payloads/artifacts/${TARGET}/
           mkdir -p Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/
@@ -88,7 +112,6 @@ jobs:
           ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: 打包产物
-        shell: bash
         run: |
           mkdir -p out
           cp -r "Root-My-Galaxy-Payloads/build/${TARGET}" out/so-build
