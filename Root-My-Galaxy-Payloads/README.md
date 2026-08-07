@@ -1,102 +1,74 @@
-# S9380ZHU1AYA1 V6 source package
+# Root My Galaxy Payloads
 
-This is the minimal source package used to compile the V6 payload that
-reached `done=1 root=1` on SM-S9380 ZHU firmware S9380ZHU1AYA1.
+This repository contains the device-specific native side of
+[Root My Galaxy](https://github.com/BuSung-dev/Root-My-Galaxy):
 
-The package intentionally does not contain `.o` files. They are generated
-under `build/v6/obj` or `objects-rebuilt` during compilation.
+- exact firmware profiles and offsets;
+- the app-domain CVE-2026-43499 exploit source and compiled payload;
+- the app bootstrap helper source;
+- the verified KernelSU late-load build artifacts;
+- the support feed consumed by the application.
 
-## Target configuration
+It intentionally does not contain Android application source code.
 
-The offset table is:
+## Supported profiles
 
-`target/pa3q-S9380ZHU1AYA1/target.h`
+| Profile | Device | Firmware | Kernel/KMI | Status |
+| --- | --- | --- | --- | --- |
+| `pa3q-S938NKSUACZF1` | Galaxy S25 Ultra `SM-S938N` | `BP4A.251205.006.S938NKSUACZF1` | `android15-6.6` | Device-tested |
+| `pa3q-S9380ZHUBCZF1` | Galaxy S25 Ultra `SM-S9380` | `BP4A.251205.006.S9380ZHUBCZF1` | `android15-6.6` | Payload build verified; KernelSU pending |
+| `essi-S721NKSSCDZF3` | Galaxy S24 FE `SM-S721N` | `BP4A.251205.006.S721NKSSCDZF3` | `6.1.157-android14-11` / `android14-6.1` | Static analysis and build verified; device-untested |
+| `e1s-S921BXXSFDZF2` | Galaxy S24 `SM-S921B` | `BP4A.251205.006.S921BXXSFDZF2` | `6.1.157-android14-11` / `android14-6.1` | Static analysis and build verified; device-untested |
+| `a15-A155NKSS6BYH1` | Galaxy A15 5G `SM-A155N` | `AP3A.240905.015.A2.A155NKSS6BYH1` | `5.10.226-android12-9-31117096` / `android12-5.10` | Static analysis and build verified; device-untested |
 
-Target table SHA-256:
+Profiles are exact-firmware profiles. A matching model with a different build
+is not equivalent and must be ported separately.
 
-`F0DD37BDDFCF157CE2ACD9E3CEA7D6D5002C3EF15BA0F7094EF32375DBFE8D51`
+Root My Galaxy requires both the exact `uname -r` value in `kernelRelease` and
+the complete `/proc/version` value in `kernelVersion`. This distinguishes
+vendor kernels that expose the same release string but were linked from
+different builds. Model and device fields are descriptive metadata; build
+display ID, SDK, ABI, and page size remain part of automatic profile selection.
 
-Important values:
+The port is based on the exploit source published at
+<https://github.com/NebuSec/CyberMeowfia/tree/main/IonStack/CVE-2026-43499/exploit>.
 
-```text
-KIMAGE_TEXT_BASE                    0xffffffc080000000
-SLIDE_TRACEFS_WORKER_CALLER_OFF     0x000d7ca0
-ASHMEM_MISC_FOPS_OFF                0x02329ee0
-ASHMEM_MISC_FOPS_FIELD_OFF         0x02329ef0
-ASHMEM_FOPS_OFF                     0x0133b148
-CONFIGFS_READ_ITER_OFF              0x0046e5f8
-CONFIGFS_BIN_WRITE_ITER_OFF         0x0046eb24
-INIT_TASK_OFF                       0x0215cd00
-ROOT_TASK_GROUP_OFF                 0x023bed00
-SELINUX_ENFORCING_OFF               0x02420e98
-CALL_USERMODEHELPER_EXEC_WORK_OFF   0x000cf408
-SYSTEM_UNBOUND_WQ_OFF               0x02149e60
-ROOT_UMH_PATH                       /data/local/tmp/cve-2026-43499-root
-```
+## Feed delivery
 
-## Source split
+Root My Galaxy resolves the payload repository's current commit first and
+fetches `support/targets-v2.json` and every artifact from that immutable commit.
+Per-artifact SHA-256 fields and manifest signatures are not part of schema
+version 2.
 
-`src/original` contains `main.c`, `util.c`, `fops.c`, `pipe.c`,
-`preload_minimal.c`, and compatibility globals from the restored original
-tree.
-
-`src/device` contains the tracefs `slide.c` and UMH `root.c`. These two files
-were compiled with the device include tree; the object hashes match the V6
-objects saved in `objects`.
-
-`helper/su_daemon.c` is the helper used both by `--run-payload` and by the
-kernel UMH path. It must be installed at the fixed `ROOT_UMH_PATH`.
-
-## Build on Windows
-
-Open PowerShell in this directory and run:
-
-```powershell
-.\build-v6.ps1
-```
-
-The script defaults to the NDK r29 clang path used for the successful build.
-Pass `-Clang` if the NDK is installed elsewhere.
-
-The outputs are written to `artifact-rebuilt/`.
-
-## Build with Make
-
-On Linux, WSL, or macOS with an Android NDK clang:
+## Build
 
 ```sh
-make CLANG=/path/to/clang
+make TARGET=pa3q-S938NKSUACZF1 ANDROID_NDK_HOME=/path/to/android-ndk
+make TARGET=essi-S721NKSSCDZF3 ANDROID_NDK_HOME=/path/to/android-ndk
+make TARGET=e1s-S921BXXSFDZF2 ANDROID_NDK_HOME=/path/to/android-ndk
+make TARGET=a15-A155NKSS6BYH1 ANDROID_NDK_HOME=/path/to/android-ndk
 ```
 
-The Makefile creates intermediate files under `build/v6/obj`; they are not
-needed at runtime and can be removed with `make clean`.
-
-The expected payload hash is:
-
-`B4A4E0A69B081FEC4840D0E47CDE5C4FAD50D9F93B04908739A5EC64B085EFCA`
-
-The known-good V6 payload hash is:
-
-`B4A4E0A69B081FEC4840D0E47CDE5C4FAD50D9F93B04908739A5EC64B085EFCA`
-
-The helper source is `helper/su_daemon.c`; it is compiled together with the
-payload by `build-v6.ps1` or `make`.
-
-## Runtime entry
-
-The successful ADB entry used the helper loader, not direct `LD_PRELOAD`:
+Outputs:
 
 ```text
-PSELECT_ROUTE_ATTEMPTS=1
-PSELECT_DELAY_USEC=10000
-/data/local/tmp/cve-2026-43499-root --run-payload \
-  /data/local/tmp/cve-2026-43499-root-original-zhu-v6.so \
-  /data/local/tmp/cve-2026-43499-root \
-  /data/local/tmp/zhu-v6.log
+build/<profile>/cve-2026-43499
+build/<profile>/cve-2026-43499-app.so
+build/<profile>/cve-2026-43499-root
 ```
 
-The success line from the known-good run was:
+The release app payload is built with:
 
-```text
-pipe-physrw-summary ... done=1 root=1 ...
+```sh
+make TARGET=essi-S721NKSSCDZF3 ANDROID_NDK_HOME=/path/to/android-ndk release
 ```
+
+The complete firmware-to-profile procedure is recorded in
+[`docs/PORTING.md`](docs/PORTING.md). Samsung-specific KernelSU changes and
+versioned artifacts are documented in [`kernelsu/README.md`](kernelsu/README.md).
+The exact S921B DZF2 analysis is recorded separately in
+[`docs/SM-S921B-S921BXXSFDZF2.md`](docs/SM-S921B-S921BXXSFDZF2.md), and the
+5.10 A15 analysis is in
+[`docs/SM-A155N-A155NKSS6BYH1.md`](docs/SM-A155N-A155NKSS6BYH1.md).
+
+Use only on devices you own or are explicitly authorized to test.
