@@ -5,7 +5,7 @@
       "payloadId": "pa3q-S9380ZHU1AYA1",
       "displayName": "Samsung Galaxy S25 Ultra (SM-S9380)",
       "models": ["SM-S9380"],
-      "kernelVersions": ["6.6.30-android15-8-30455426-abogkiS9380ZHU1AYA1-4k"],
+      "kernelVersions": ["6.6.30"],
       "exploit": {
         "url": "https://raw.githubusercontent.com/sir990928/-/main/Root-My-Galaxy-Payloads/artifacts/pa3q-S9380ZHU1AYA1/cve-2026-43499-app.so",
         "size": 125008
