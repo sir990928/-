@@ -73,7 +73,7 @@ jobs:
           payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so")"
           tmp_manifest="$(mktemp)"
           jq --arg profile "$TARGET_NAME" --argjson size "$payload_size" \
-            '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
+            '(.payloads[] | select(.payloadId == $profile) | .exploit.size) = $size' \
             Root-My-Galaxy-Payloads/support/targets-v3.json > "$tmp_manifest"
           mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v3.json
           
