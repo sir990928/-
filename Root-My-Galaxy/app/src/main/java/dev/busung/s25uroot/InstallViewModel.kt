@@ -290,29 +290,33 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun installKernelSu(payloads: VerifiedPayloads) {
-        if (shizukuEnabled()) {
-            shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_PATH, "755")
-            shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")
-            appendLog(app.getString(R.string.log_ksu_staged))
-        } else {
-            val source = shellQuote(payloads.kernelSu.absolutePath)
-            val stageCommand =
-                "/system/bin/cp $source /data/local/tmp/ksud-s25u-kdp && " +
-                    "/system/bin/cp $source /data/local/tmp/.ksud-stage && " +
-                    "/system/bin/chmod 755 /data/local/tmp/ksud-s25u-kdp /data/local/tmp/.ksud-stage"
-            val stage = runHelper("-c", stageCommand)
-            require(stage.code == 0) { app.getString(R.string.error_ksu_stage, stage.output) }
-            appendLog(app.getString(R.string.log_ksu_staged))
-        }
-
-        val lateLoad = runHelper("--late-load")
-        require(lateLoad.code == 0) {
-            app.getString(R.string.error_ksu_verify, lateLoad.code, lateLoad.output)
-        }
-        if (lateLoad.output.isNotBlank()) appendLog(lateLoad.output)
-        storeInstallReceipt()
-        appendLog(app.getString(R.string.log_ksu_control_verified))
+    if (shizukuEnabled()) {
+        shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_PATH, "755")
+        shizukuStage(payloads.kernelSu, SHIZUKU_KSUD_STAGE_PATH, "755")
+        appendLog(app.getString(R.string.log_ksu_staged))
+    } else {
+        val source = shellQuote(payloads.kernelSu.absolutePath)
+        val stageCommand =
+            "/system/bin/cp $source /data/local/tmp/ksud-s25u-kdp && " +
+                "/system/bin/cp $source /data/local/tmp/.ksud-stage && " +
+                "/system/bin/chmod 755 /data/local/tmp/ksud-s25u-kdp /data/local/tmp/.ksud-stage"
+        val stage = runHelper("-c", stageCommand)
+        require(stage.code == 0) { app.getString(R.string.error_ksu_stage, stage.output) }
+        appendLog(app.getString(R.string.log_ksu_staged))
     }
+
+    val ksuCmd = "ln -sf /data/local/tmp/ksud-s25u-kdp /data/local/tmp/ksud-selected && " +
+        "mount --bind /data/local/tmp/ksud-selected /system/bin/logcat && " +
+        "logcat late-load --ephemeral"
+
+    val lateLoad = runHelper("-c", ksuCmd)
+    require(lateLoad.code == 0) {
+        app.getString(R.string.error_ksu_verify, lateLoad.code, lateLoad.output)
+    }
+    if (lateLoad.output.isNotBlank()) appendLog(lateLoad.output)
+    storeInstallReceipt()
+    appendLog(app.getString(R.string.log_ksu_control_verified))
+}
 
     private fun detectInstalled(): Boolean {
         if (NativeProbe.isKernelSuActive()) return true
