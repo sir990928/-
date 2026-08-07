@@ -37,7 +37,7 @@ android {
     }
 
     lint {
-        abortOnError false
+        abortOnError = false
     }
 
     buildFeatures {
