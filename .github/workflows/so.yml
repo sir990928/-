@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
 
       - name: 安装基础工具
-        run: sudo apt update && sudo apt install -y make zip unzip wget
+        run: sudo apt update && sudo apt install -y make zip unzip wget jq
 
       - name: 下载并安装 NDK r29
         run: |
@@ -64,16 +64,25 @@ jobs:
       - name: 提交产物到仓库
         run: |
           mkdir -p Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/
+          mkdir -p Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/
           cp Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-app.so \
              Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so
           cp Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root \
-             Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-root
+             Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
+          
+          payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so")"
+          tmp_manifest="$(mktemp)"
+          jq --arg profile "$TARGET_NAME" --argjson size "$payload_size" \
+            '(.targets[] | select(.profileId == $profile) | .exploit.size) = $size' \
+            Root-My-Galaxy-Payloads/support/targets-v2.json > "$tmp_manifest"
+          mv "$tmp_manifest" Root-My-Galaxy-Payloads/support/targets-v2.json
           
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f \
             "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so" \
-            "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-root"
+            "Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so" \
+            Root-My-Galaxy-Payloads/support/targets-v2.json
           
           if git diff --cached --quiet; then
             echo "文件无改动，跳过提交"
