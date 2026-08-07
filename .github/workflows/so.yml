@@ -71,7 +71,10 @@ jobs:
              Root-My-Galaxy/app/src/main/jniLibs/arm64-v8a/libcve43499root.so
           
           payload_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/artifacts/${TARGET_NAME}/cve-2026-43499-app.so")"
-          sed -i "s|\"size\": [0-9]*|\"size\": $payload_size|" \
+          ksud_size="$(stat -c '%s' "Root-My-Galaxy-Payloads/build/${TARGET_NAME}/cve-2026-43499-root")"
+          sed -i "/\"exploit\"/,/\"size\"/s|\"size\": [0-9]*|\"size\": $payload_size|" \
+            Root-My-Galaxy-Payloads/support/targets-v3.json
+          sed -i "/\"kernelsu\"/,/\"size\"/s|\"size\": [0-9]*|\"size\": $ksud_size|" \
             Root-My-Galaxy-Payloads/support/targets-v3.json
           
           git config user.name "github-actions[bot]"
