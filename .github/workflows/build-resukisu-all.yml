@@ -22,8 +22,6 @@ jobs:
         cd ReSukiSU/kernel
         sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
         git config --global --add safe.directory /__w/-/-
-        # Link uapi to include path
-        ln -sf /__w/-/-/ReSukiSU/uapi /__w/-/-/ReSukiSU/kernel/include/uapi
 
     - name: Build kernelsu.ko
       run: |
@@ -34,6 +32,7 @@ jobs:
         CONFIG_KSU_SAMSUNG_RKP=y \
         CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
         CONFIG_KSU_TRACEPOINT_HOOK=y \
+        CONFIG_KSU_SUSFS=y \
         CC=clang make
         
         mkdir -p /github/workspace/out
@@ -72,10 +71,13 @@ jobs:
         rustup target add aarch64-linux-android
 
     - name: Build ksud
+      env:
+        CC_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
+        AR_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
       run: |
-        source ReSukiSU/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
         RUSTFLAGS="-C opt-level=z -C lto" cargo build --target aarch64-linux-android --release --manifest-path ./ReSukiSU/userspace/ksud/Cargo.toml
-        STRIP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+        STRIP="/usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
         "$STRIP" ReSukiSU/target/aarch64-linux-android/release/ksud
 
     - name: Upload ksud
