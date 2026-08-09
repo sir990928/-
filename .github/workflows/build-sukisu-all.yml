@@ -74,6 +74,10 @@ jobs:
       run: |
         source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
         cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
+        
+        # Strip 去掉调试符号，和官方一样
+        STRIP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+        "$STRIP" SukiSU-Ultra/target/aarch64-linux-android/release/ksud
 
     - name: Upload ksud
       uses: actions/upload-artifact@v4
