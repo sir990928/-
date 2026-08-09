@@ -22,6 +22,8 @@ jobs:
         cd ReSukiSU/kernel
         sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
         git config --global --add safe.directory /__w/-/-
+        # Link uapi to include path
+        ln -sf /__w/-/-/ReSukiSU/uapi /__w/-/-/ReSukiSU/kernel/include/uapi
 
     - name: Build kernelsu.ko
       run: |
