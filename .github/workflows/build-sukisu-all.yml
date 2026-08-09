@@ -37,7 +37,6 @@ jobs:
         path: /github/workspace/out/android15-6.6_kernelsu-sukisu.ko
 
   build-ksud:
-    needs: build-ko
     runs-on: ubuntu-latest
     env:
       ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
@@ -46,12 +45,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Download ko
-      uses: actions/download-artifact@v4
-      with:
-        name: android15-6.6-lkm
-        path: SukiSU-Ultra/userspace/ksud/bin/aarch64/
 
     - name: 下载并安装 NDK r29
       run: |
@@ -63,7 +56,6 @@ jobs:
         mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
         mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
         rm /tmp/android-ndk.zip
-        echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
 
     - name: Setup rustup
       run: |
@@ -73,9 +65,7 @@ jobs:
     - name: Build ksud
       run: |
         source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
-        cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
-        
-        # Strip 去掉调试符号，和官方一样
+        RUSTFLAGS="-C opt-level=z -C lto" cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
         STRIP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
         "$STRIP" SukiSU-Ultra/target/aarch64-linux-android/release/ksud
 
