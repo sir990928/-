@@ -22,6 +22,7 @@ jobs:
         cd ReSukiSU/kernel
         sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
         git config --global --add safe.directory /__w/-/-
+        ln -sf /__w/-/-/ReSukiSU/uapi /__w/-/-/ReSukiSU/kernel/include/uapi
 
     - name: Build kernelsu.ko
       run: |
@@ -47,7 +48,7 @@ jobs:
   build-ksud:
     runs-on: ubuntu-latest
     env:
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.12904245
 
     steps:
     - uses: actions/checkout@v4
@@ -57,13 +58,22 @@ jobs:
     - name: 下载并安装 NDK r29
       run: |
         set -eu
+        echo "下载 NDK r29..."
         wget -q --timeout=60 --tries=5 \
           "https://dl.google.com/android/repository/android-ndk-r29-linux.zip" \
           -O /tmp/android-ndk.zip
+        echo "解压 NDK..."
         unzip -q /tmp/android-ndk.zip -d /tmp/
         mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
         mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
         rm /tmp/android-ndk.zip
+        echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
+
+    - name: 验证 NDK
+      run: |
+        CLANG="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
+        test -x "$CLANG"
+        "$CLANG" --version
 
     - name: Setup rustup
       run: |
@@ -72,12 +82,12 @@ jobs:
 
     - name: Build ksud
       env:
-        CC_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
-        AR_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
+        CC_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
+        AR_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
       run: |
         RUSTFLAGS="-C opt-level=z -C lto" cargo build --target aarch64-linux-android --release --manifest-path ./ReSukiSU/userspace/ksud/Cargo.toml
-        STRIP="/usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+        STRIP="/usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
         "$STRIP" ReSukiSU/target/aarch64-linux-android/release/ksud
 
     - name: Upload ksud
