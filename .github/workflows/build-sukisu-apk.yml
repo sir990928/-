@@ -1,0 +1,43 @@
+name: Build SuKiSU Manager APK
+
+on:
+  push:
+    paths:
+      - 'SukiSU-Ultra/manager/**'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install SDK 35
+      run: |
+        yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+    - name: Patch SDK version
+      run: |
+        cd SukiSU-Ultra/manager
+        sed -i 's/compileSdk\s*=\s*[0-9]*/compileSdk = 35/' app/build.gradle.kts
+        sed -i 's/targetSdk\s*=\s*[0-9]*/targetSdk = 35/' app/build.gradle.kts
+
+    - name: Build APK
+      run: |
+        cd SukiSU-Ultra/manager
+        ./gradlew assembleRelease
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: sukisu-manager
+        path: SukiSU-Ultra/manager/app/build/outputs/apk/release/*.apk
