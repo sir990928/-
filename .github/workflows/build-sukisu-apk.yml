@@ -12,6 +12,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Link uapi headers
+      run: |
+        ln -sf "$(pwd)/SukiSU-Ultra/uapi" SukiSU-Ultra/manager/app/src/main/cpp/uapi
+
     - name: Setup JDK 21
       uses: actions/setup-java@v4
       with:
