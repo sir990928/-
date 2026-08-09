@@ -17,10 +17,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Fix KSU_SRC
+    - name: Fix build
       run: |
         cd ReSukiSU/kernel
         sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
+        git config --global --add safe.directory /__w/-/-
 
     - name: Build kernelsu.ko
       run: |
@@ -30,8 +31,7 @@ jobs:
         CONFIG_KSU_SAMSUNG_KDP=y \
         CONFIG_KSU_SAMSUNG_RKP=y \
         CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
-        CONFIG_KSU_MANUAL_HOOK=y \
-        CONFIG_KSU_SUSFS=y \
+        CONFIG_KSU_TRACEPOINT_HOOK=y \
         CC=clang make
         
         mkdir -p /github/workspace/out
