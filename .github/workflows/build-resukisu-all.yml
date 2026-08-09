@@ -17,6 +17,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Fix KSU_SRC
+      run: |
+        cd ReSukiSU/kernel
+        sed -i 's|KSU_SRC := .*|KSU_SRC := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))|' Kbuild
+        sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
+
     - name: Build kernelsu.ko
       run: |
         cd ReSukiSU/kernel
