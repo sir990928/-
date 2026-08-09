@@ -31,7 +31,7 @@
 #ifdef CONFIG_KSU_TRACEPOINT_HOOK
 #include "hook/tp_marker.h"
 #include "compat/samsung_defex.h"
-+#include "ksu_samsung_kdp.h"
+#include "ksu_samsung_kdp.h"
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
