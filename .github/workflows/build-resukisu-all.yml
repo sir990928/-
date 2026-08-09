@@ -1,4 +1,4 @@
-name: Build ReSukiSU ko + ksud + apk
+name: Build ReSukiSU ko + ksud
 
 on:
   push:
@@ -20,7 +20,6 @@ jobs:
     - name: Fix KSU_SRC
       run: |
         cd ReSukiSU/kernel
-        sed -i 's|KSU_SRC := .*|KSU_SRC := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))|' Kbuild
         sed -i 's|LOCAL_GIT_EXISTS := .*|LOCAL_GIT_EXISTS := 1|' Kbuild
 
     - name: Build kernelsu.ko
@@ -82,28 +81,3 @@ jobs:
       with:
         name: ksud-resukisu
         path: ReSukiSU/target/aarch64-linux-android/release/ksud
-
-  build-apk:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Setup JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: "21"
-        distribution: temurin
-
-    - uses: android-actions/setup-android@v3
-
-    - name: Build APK
-      working-directory: ReSukiSU/manager
-      run: |
-        chmod +x gradlew
-        ./gradlew assembleRelease --no-daemon
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: resukisu-manager
-        path: ReSukiSU/manager/app/build/outputs/apk/release/*.apk
