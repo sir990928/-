@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "Root-My-Galaxy/**"
-      - ".github/workflows/build-apk.yml"
+   #   - "Root-My-Galaxy/**"
+  #    - ".github/workflows/build-apk.yml"
   workflow_dispatch:
 
 env:
