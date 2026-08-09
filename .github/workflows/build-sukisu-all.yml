@@ -54,6 +54,11 @@ jobs:
       with:
         ndk-version: r29
 
+    - name: Debug NDK path
+      run: |
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+        ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" | head -5
+
     - name: Build ksud
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
