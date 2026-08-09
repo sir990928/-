@@ -21,15 +21,9 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Install SDK 35
+    - name: Install SDK 37
       run: |
-        yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-    - name: Patch SDK version
-      run: |
-        cd SukiSU-Ultra/manager
-        sed -i 's/compileSdk\s*=\s*[0-9]*/compileSdk = 35/' app/build.gradle.kts
-        sed -i 's/targetSdk\s*=\s*[0-9]*/targetSdk = 35/' app/build.gradle.kts
+        yes | sdkmanager "platforms;android-37" "build-tools;37.0.0"
 
     - name: Build APK
       run: |
