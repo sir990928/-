@@ -30,6 +30,10 @@ jobs:
       - name: 安装 Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: 安装 SDK 37 和构建工具
+        run: |
+          yes | sdkmanager --sdk_root=/usr/local/lib/android/sdk "platforms;android-37" "build-tools;37.0.0"
+
       - name: 打包Release APK
         working-directory: SukiSU-Ultra/manager
         run: |
