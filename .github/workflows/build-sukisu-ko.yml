@@ -1,4 +1,3 @@
-cat > ~/-/.github/workflows/build-sukisu-ko.yml << 'EOF'
 name: Build SuKiSU Samsung kernel module
 
 on:
@@ -35,4 +34,3 @@ jobs:
       with:
         name: sukisu-ko
         path: /github/workspace/out/android15-6.6_kernelsu-sukisu.ko
-EOF
