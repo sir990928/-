@@ -35,6 +35,7 @@ jobs:
         CONFIG_KSU_TRACEPOINT_HOOK=y \
         CONFIG_KSU_SUSFS=y \
         CC=clang make
+        llvm-strip -d kernelsu.ko
         
         mkdir -p /github/workspace/out
         cp kernelsu.ko /github/workspace/out/android15-6.6_kernelsu-resukisu.ko
@@ -65,11 +66,10 @@ jobs:
         mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
         mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
         rm /tmp/android-ndk.zip
-        echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
 
-    - name: Setup rustup
+    - name: Setup rustup (nightly)
       run: |
-        rustup update stable
+        rustup default nightly
         rustup target add aarch64-linux-android
 
     - name: Build ksud
