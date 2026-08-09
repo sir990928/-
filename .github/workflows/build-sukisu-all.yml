@@ -1,0 +1,68 @@
+name: Build SuKiSU ko + ksud
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ko:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk-min:android15-6.6-20260313
+      options: --privileged
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build kernelsu.ko
+      run: |
+        cd SukiSU-Ultra/kernel
+        CONFIG_KSU=m \
+        CONFIG_KSU_SAMSUNG_DEFEX=y \
+        CONFIG_KSU_SAMSUNG_KDP=y \
+        CONFIG_KSU_SAMSUNG_RKP=y \
+        CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
+        CC=clang make
+        
+        mkdir -p /github/workspace/out
+        cp kernelsu.ko /github/workspace/out/android15-6.6_kernelsu-sukisu.ko
+
+    - name: Upload ko
+      uses: actions/upload-artifact@v4
+      with:
+        name: android15-6.6-lkm
+        path: /github/workspace/out/android15-6.6_kernelsu-sukisu.ko
+
+  build-ksud:
+    needs: build-ko
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download ko
+      uses: actions/download-artifact@v4
+      with:
+        name: android15-6.6-lkm
+        path: SukiSU-Ultra/userspace/ksud/bin/aarch64/
+
+    - name: Setup rustup
+      run: |
+        rustup update stable
+        rustup target add aarch64-linux-android
+
+    - uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r29
+
+    - name: Build ksud
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: |
+        source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
+        cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
+
+    - name: Upload ksud
+      uses: actions/upload-artifact@v4
+      with:
+        name: ksud-samsung
+        path: target/aarch64-linux-android/release/ksud
