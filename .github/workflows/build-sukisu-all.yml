@@ -39,8 +39,13 @@ jobs:
   build-ksud:
     needs: build-ko
     runs-on: ubuntu-latest
+    env:
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Download ko
       uses: actions/download-artifact@v4
@@ -48,22 +53,32 @@ jobs:
         name: android15-6.6-lkm
         path: SukiSU-Ultra/userspace/ksud/bin/aarch64/
 
+    - name: 下载并安装 NDK r29
+      run: |
+        set -eu
+        wget -q --show-progress --timeout=60 --tries=5 \
+          "https://dl.google.com/android/repository/android-ndk-r29-linux.zip" \
+          -O /tmp/android-ndk.zip
+        unzip -q /tmp/android-ndk.zip -d /tmp/
+        mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
+        mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
+        rm /tmp/android-ndk.zip
+        echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> "$GITHUB_ENV"
+
+    - name: 验证 NDK
+      run: |
+        CLANG="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+        test -x "$CLANG"
+        "$CLANG" --version
+
     - name: Setup rustup
       run: |
         rustup update stable
         rustup target add aarch64-linux-android
 
-    - uses: nttld/setup-ndk@v1
-      id: ndk
-      with:
-        ndk-version: r29
-
     - name: Build ksud
-      env:
-        CC_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
-        AR_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
       run: |
+        source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
         cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
 
     - name: Upload ksud
