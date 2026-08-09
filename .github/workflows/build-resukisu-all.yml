@@ -1,0 +1,103 @@
+name: Build ReSukiSU ko + ksud + apk
+
+on:
+  push:
+    paths:
+      - 'ReSukiSU/**'
+  workflow_dispatch:
+
+jobs:
+  build-ko:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk-min:android15-6.6-20260313
+      options: --privileged
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build kernelsu.ko
+      run: |
+        cd ReSukiSU/kernel
+        CONFIG_KSU=m \
+        CONFIG_KSU_SAMSUNG_DEFEX=y \
+        CONFIG_KSU_SAMSUNG_KDP=y \
+        CONFIG_KSU_SAMSUNG_RKP=y \
+        CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y \
+        CONFIG_KSU_MANUAL_HOOK=y \
+        CONFIG_KSU_SUSFS=y \
+        CC=clang make
+        
+        mkdir -p /github/workspace/out
+        cp kernelsu.ko /github/workspace/out/android15-6.6_kernelsu-resukisu.ko
+
+    - name: Upload ko
+      uses: actions/upload-artifact@v4
+      with:
+        name: android15-6.6-lkm
+        path: /github/workspace/out/android15-6.6_kernelsu-resukisu.ko
+
+  build-ksud:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 下载并安装 NDK r29
+      run: |
+        set -eu
+        wget -q --timeout=60 --tries=5 \
+          "https://dl.google.com/android/repository/android-ndk-r29-linux.zip" \
+          -O /tmp/android-ndk.zip
+        unzip -q /tmp/android-ndk.zip -d /tmp/
+        mkdir -p "$(dirname ${ANDROID_NDK_HOME})"
+        mv /tmp/android-ndk-r29 "${ANDROID_NDK_HOME}"
+        rm /tmp/android-ndk.zip
+
+    - name: Setup rustup
+      run: |
+        rustup update stable
+        rustup target add aarch64-linux-android
+
+    - name: Build ksud
+      run: |
+        source ReSukiSU/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
+        RUSTFLAGS="-C opt-level=z -C lto" cargo build --target aarch64-linux-android --release --manifest-path ./ReSukiSU/userspace/ksud/Cargo.toml
+        STRIP="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+        "$STRIP" ReSukiSU/target/aarch64-linux-android/release/ksud
+
+    - name: Upload ksud
+      uses: actions/upload-artifact@v4
+      with:
+        name: ksud-resukisu
+        path: ReSukiSU/target/aarch64-linux-android/release/ksud
+
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: "21"
+        distribution: temurin
+
+    - uses: android-actions/setup-android@v3
+
+    - name: Build APK
+      working-directory: ReSukiSU/manager
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleRelease --no-daemon
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: resukisu-manager
+        path: ReSukiSU/manager/app/build/outputs/apk/release/*.apk
