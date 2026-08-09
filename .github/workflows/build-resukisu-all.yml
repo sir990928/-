@@ -78,6 +78,7 @@ jobs:
         CXX_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang++
         AR_aarch64_linux_android: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
         CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
+        BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android: --sysroot=/usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/sysroot
       run: |
         RUSTFLAGS="-C opt-level=z -C lto" cargo build --target aarch64-linux-android --release --manifest-path ./ReSukiSU/userspace/ksud/Cargo.toml
         STRIP="/usr/local/lib/android/sdk/ndk/29.0.12904245/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
