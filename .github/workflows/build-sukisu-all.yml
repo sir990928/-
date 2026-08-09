@@ -1,6 +1,9 @@
 name: Build SuKiSU ko + ksud
 
 on:
+  push:
+    paths:
+      - 'SukiSU-Ultra/**'
   workflow_dispatch:
 
 jobs:
@@ -51,19 +54,16 @@ jobs:
         rustup target add aarch64-linux-android
 
     - uses: nttld/setup-ndk@v1
+      id: ndk
       with:
         ndk-version: r29
 
-    - name: Debug NDK path
-      run: |
-        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-        ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" | head -5
-
     - name: Build ksud
       env:
-        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        CC_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
+        AR_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang
       run: |
-        source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
         cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
 
     - name: Upload ksud
