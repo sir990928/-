@@ -47,8 +47,7 @@ static bool samsung_sucompat_should_redirect(int syscall_nr)
         return false;
     }
 
-    return ksu_su_compat_enabled &&
-           ksu_is_allow_uid_for_current(current_uid().val);
+    return ksu_is_allow_uid_for_current(current_uid().val);
 }
 
 static long __nocfi samsung_sucompat_execve(const struct pt_regs *regs)
