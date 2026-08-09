@@ -74,12 +74,9 @@ jobs:
       run: |
         source SukiSU-Ultra/.github/scripts/setup-rust-build.sh aarch64-linux-android 26
         cargo build --target aarch64-linux-android --release --manifest-path ./SukiSU-Ultra/userspace/ksud/Cargo.toml
-        find . -name "ksud" -type f 2>/dev/null
 
     - name: Upload ksud
       uses: actions/upload-artifact@v4
       with:
         name: ksud-samsung
-        path: |
-          SukiSU-Ultra/target/aarch64-linux-android/release/ksud
-          target/aarch64-linux-android/release/ksud
+        path: SukiSU-Ultra/target/aarch64-linux-android/release/ksud
