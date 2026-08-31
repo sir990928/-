@@ -1,0 +1,69 @@
+name: Build GalaxyBudsClient Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+
+    steps:
+    - name: Checkout this workflow repo
+      uses: actions/checkout@v3
+
+    - name: Clone GalaxyBudsClient repo
+      run: git clone https://github.com/timschneeb/GalaxyBudsClient.git
+
+    - name: Install .NET 8 SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Install .NET Android workload
+      run: dotnet workload install android
+
+    - name: Install Android SDK & API 34
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unzip wget
+        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        cd $ANDROID_SDK_ROOT/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+        unzip cmdline-tools.zip
+        mv cmdline-tools latest
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+    - name: Create Directory.Build.props to override TFM
+      run: |
+        cat <<EOF > GalaxyBudsClient/GalaxyBudsClient.Android/Directory.Build.props
+        <Project>
+          <PropertyGroup>
+            <TargetFramework>net8.0-android34</TargetFramework>
+          </PropertyGroup>
+        </Project>
+        EOF
+
+    - name: Build GalaxyBudsClient.Android
+      working-directory: GalaxyBudsClient/GalaxyBudsClient.Android
+      run: |
+        dotnet publish \
+          -f net8.0-android \
+          -c Debug \
+          -p:AndroidPackageFormats=apk \
+          -p:AndroidSdkDirectory=$ANDROID_SDK_ROOT \
+          -p:DebugType=PdbOnly \
+          -p:EmbedAssembliesIntoApk=true \
+          -p:NoDemo=true
+          -p:TargetFramework=net8.0-android34
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: GalaxyBudsClient-Android-APK
+        path: GalaxyBudsClient/GalaxyBudsClient.Android/bin/Debug/net8.0-android/android-arm64/publish/*.apk
